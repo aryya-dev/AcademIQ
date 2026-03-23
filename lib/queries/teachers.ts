@@ -32,5 +32,5 @@ export async function getTeachersBySubject(subjectId: string) {
     .select('*, teachers(*)')
     .eq('subject_id', subjectId);
   if (error) throw error;
-  return (data || []).map(d => d.teachers) as Teacher[];
+  return (data || []).map((d: any) => d.teachers) as Teacher[];
 }

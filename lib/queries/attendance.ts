@@ -36,7 +36,7 @@ export async function getStudentAttendancePct(studentId: string, subjectId: stri
     .eq('subject_id', subjectId);
   if (error) throw error;
   if (!data || data.length === 0) return null;
-  const present = data.filter(r => r.status === 'present').length;
+  const present = data.filter((r: any) => r.status === 'present').length;
   return Math.round((present / data.length) * 100);
 }
 
@@ -57,5 +57,5 @@ export async function getAbsenteeReport(batchId: string, thresholdPct = 75) {
   }
   return Object.entries(map)
     .map(([id, v]) => ({ student_id: id, name: v.name, pct: Math.round((v.present / v.total) * 100) }))
-    .filter(s => s.pct < thresholdPct);
+    .filter((s: any) => s.pct < thresholdPct);
 }

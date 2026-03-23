@@ -55,8 +55,8 @@ export async function getStudentsNotContactedThisMonth(mentorId: string) {
     .gte('contacted_at', monthStart.toISOString());
   if (le) throw le;
 
-  const contactedIds = new Set((logs || []).map(l => l.student_id));
-  return (students || []).filter(s => !contactedIds.has(s.id));
+  const contactedIds = new Set((logs || []).map((l: any) => l.student_id));
+  return (students || []).filter((s: any) => !contactedIds.has(s.id));
 }
 
 // ── Mentoring Messages ─────────────────────────────────────────
@@ -113,7 +113,7 @@ export async function getPendingMentoringMessages(mentorId: string) {
     .lte('message_date', `${year}-${String(month).padStart(2,'0')}-31`);
   if (me) throw me;
 
-  const sentSet = new Set((sent || []).map(s => `${s.student_id}:${s.type}`));
+  const sentSet = new Set((sent || []).map((s: any) => `${s.student_id}:${s.type}`));
   const pending: { student_id: string; name: string; missing: string[] }[] = [];
 
   for (const s of students || []) {

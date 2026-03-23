@@ -49,6 +49,6 @@ export async function getSyllabusCompletionPct(subjectId: string, batchId: strin
     .eq('batch_id', batchId);
   if (error) throw error;
   if (!data || data.length === 0) return 0;
-  const done = data.filter(r => r.status === 'completed').length;
+  const done = data.filter((r: any) => r.status === 'completed').length;
   return Math.round((done / data.length) * 100);
 }
