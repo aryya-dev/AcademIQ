@@ -22,7 +22,7 @@ export default function ProfilePage() {
 
   async function load() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } }: any = await supabase.auth.getUser();
       if (!user) {
         router.push('/login');
         return;

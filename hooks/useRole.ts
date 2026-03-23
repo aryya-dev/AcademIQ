@@ -11,7 +11,7 @@ export function useRole() {
   useEffect(() => {
     async function load() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user } }: any = await supabase.auth.getUser();
         if (user) {
           const p = await getProfile(user.id);
           setProfile(p);
