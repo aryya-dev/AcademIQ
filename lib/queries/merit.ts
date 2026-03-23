@@ -28,7 +28,7 @@ export async function getTotalScore(actorId: string) {
     .select('points')
     .eq('actor_id', actorId);
   if (error) throw error;
-  return (data || []).reduce((sum, r) => sum + (r.points || 0), 0);
+  return (data || []).reduce((sum: number, r: any) => sum + (r.points || 0), 0)
 }
 
 export async function getAllScoresSummary() {
