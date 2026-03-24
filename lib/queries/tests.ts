@@ -59,6 +59,15 @@ export async function getStudentMarks(studentId: string) {
   return data || [];
 }
 
+export async function getBatchTestMarks(batchId: string) {
+  const { data, error } = await supabase
+    .from('test_marks')
+    .select('*, tests!inner(batch_id, max_marks)')
+    .eq('tests.batch_id', batchId);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getOverdueEvaluations() {
   const today = new Date().toISOString().split('T')[0];
   const { data, error } = await supabase
@@ -68,4 +77,12 @@ export async function getOverdueEvaluations() {
     .is('answer_key_shared', false);
   if (error) throw error;
   return data as Test[];
+}
+
+export async function getAllTestMarks() {
+  const { data, error } = await supabase
+    .from('test_marks')
+    .select('*, students(*), tests(*, subjects(*), batches(*))');
+  if (error) throw error;
+  return data || [];
 }

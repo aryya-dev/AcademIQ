@@ -7,26 +7,45 @@ import Table from '@/components/ui/Table';
 import Badge, { statusBadge } from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { getStudents, updateStudent } from '@/lib/queries/students';
-import type { Student } from '@/types';
+import { getBatches } from '@/lib/queries/batches';
+import { getSubjects } from '@/lib/queries/subjects';
+import { getEnrollmentsByStudent, createEnrollment, deleteEnrollment } from '@/lib/queries/enrollments';
+import type { Student, Batch, Subject } from '@/types';
 import Link from 'next/link';
 import Modal from '@/components/ui/Modal';
 import StudentForm from '@/components/forms/StudentForm';
 import { Edit2, Plus, Search, User } from 'lucide-react';
 
+interface EnrollmentEntry {
+  id: string;
+  batch_id: string;
+  subject_id: string;
+}
+
 export default function StudentsPage() {
   const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [filtered, setFiltered] = useState<Student[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [batchFilter, setBatchFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [selectedEnrollments, setSelectedEnrollments] = useState<EnrollmentEntry[]>([]);
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    getStudents()
-      .then(data => { setStudents(data); setFiltered(data); })
+    Promise.all([getStudents(), getBatches(), getSubjects()])
+      .then(([studentData, batchData, subjectData]) => {
+        setStudents(studentData);
+        setFiltered(studentData);
+        setBatches(batchData);
+        setSubjects(subjectData);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -34,12 +53,48 @@ export default function StudentsPage() {
   useEffect(() => {
     let data = students;
     if (statusFilter !== 'all') data = data.filter(s => s.status === statusFilter);
+    if (batchFilter !== 'all') {
+      data = data.filter(s =>
+        s.enrollments?.some(e => e.batches?.id === batchFilter)
+      );
+    }
     if (search) data = data.filter(s =>
       s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.school_name?.toLowerCase().includes(search.toLowerCase())
     );
     setFiltered(data);
-  }, [students, search, statusFilter]);
+  }, [students, search, statusFilter, batchFilter]);
+
+  // Helper: get unique batches for a student
+  function getStudentBatches(s: Student) {
+    if (!s.enrollments || s.enrollments.length === 0) return [];
+    const seen = new Set<string>();
+    return s.enrollments
+      .filter(e => e.batches !== null)
+      .filter(e => {
+        if (seen.has(e.batches!.id)) return false;
+        seen.add(e.batches!.id);
+        return true;
+      })
+      .map(e => e.batches!);
+  }
+
+  async function openEditModal(s: Student) {
+    setSelectedStudent(s);
+    setSelectedEnrollments([]);
+    setEnrollmentsLoading(true);
+    setEditModalOpen(true);
+    try {
+      const enrollments = await getEnrollmentsByStudent(s.id);
+      setSelectedEnrollments(
+        enrollments.map((e: any) => ({ id: e.id, batch_id: e.batch_id, subject_id: e.subject_id }))
+      );
+    } catch {
+      // ignore — form will still work without pre-filled enrollment
+    } finally {
+      setEnrollmentsLoading(false);
+    }
+  }
 
   const columns = [
     {
@@ -55,17 +110,31 @@ export default function StudentsPage() {
     },
     { key: 'class', header: 'Class', render: (s: Student) => <span>Class {s.class}</span> },
     { key: 'school_name', header: 'School' },
+    {
+      key: 'batches', header: 'Batch',
+      render: (s: Student) => {
+        const batchList = getStudentBatches(s);
+        if (batchList.length === 0) return <span className="text-[#4b5563]">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {batchList.map(b => (
+              <Badge key={b.id} variant="purple">{b.name}</Badge>
+            ))}
+          </div>
+        );
+      }
+    },
     { key: 'parent_phone', header: 'Parent Phone', render: (s: Student) => <span className="font-mono text-sm">{s.parent_phone || '—'}</span> },
     { key: 'status', header: 'Status', render: (s: Student) => <Badge variant={statusBadge(s.status)}>{s.status}</Badge> },
     {
       key: 'actions', header: '',
       render: (s: Student) => (
         <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             icon={<Edit2 className="w-3.5 h-3.5" />}
-            onClick={() => { setSelectedStudent(s); setEditModalOpen(true); }}
+            onClick={() => openEditModal(s)}
           >
             Edit
           </Button>
@@ -77,12 +146,47 @@ export default function StudentsPage() {
     },
   ];
 
-  async function handleUpdate(updates: any) {
+  async function handleUpdate(updates: {
+    name: string; class: string; school_name: string;
+    parent_phone: string; status: string;
+    batch_id: string; selectedSubjectIds: string[];
+    existingEnrollments?: EnrollmentEntry[];
+  }) {
     if (!selectedStudent) return;
     setUpdating(true);
     try {
-      await updateStudent(selectedStudent.id, updates);
+      // 1. Update basic student fields
+      await updateStudent(selectedStudent.id, {
+        name: updates.name,
+        class: updates.class,
+        school_name: updates.school_name,
+        parent_phone: updates.parent_phone,
+        status: updates.status as any,
+      });
+
+      // 2. Sync enrollments (only if batch/subjects were shown)
+      const existing = updates.existingEnrollments || [];
+      if (updates.batch_id) {
+        // Delete all old enrollments
+        await Promise.all(existing.map(e => deleteEnrollment(e.id)));
+        // Create new enrollments for each selected subject
+        await Promise.all(
+          updates.selectedSubjectIds.map(sid =>
+            createEnrollment({
+              student_id: selectedStudent.id,
+              batch_id: updates.batch_id,
+              subject_id: sid,
+              role: 'primary',
+            })
+          )
+        );
+      } else if (existing.length > 0 && updates.selectedSubjectIds.length === 0) {
+        // User cleared all subjects — remove all enrollments
+        await Promise.all(existing.map(e => deleteEnrollment(e.id)));
+      }
+
       setEditModalOpen(false);
+      // Refresh the list
       const data = await getStudents();
       setStudents(data);
       router.refresh();
@@ -99,8 +203,8 @@ export default function StudentsPage() {
       <div className="p-6 space-y-4">
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <div className="flex gap-3 flex-1 max-w-lg">
-            <div className="relative flex-1">
+          <div className="flex gap-3 flex-1 max-w-2xl flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4b5563]" />
               <input
                 placeholder="Search students..."
@@ -109,11 +213,25 @@ export default function StudentsPage() {
                 className="pl-9"
               />
             </div>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 'auto' }}>
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="on_leave">On Leave</option>
+            <select 
+              value={statusFilter} 
+              onChange={e => setStatusFilter(e.target.value)}
+              className="h-10 bg-[#0a0c14] border-[#1e2130] rounded-xl px-4 text-white text-sm min-w-[150px]"
+            >
+              <option value="all">All Statuses</option>
+              {[
+                'April Joinee',
+                'Not contacted',
+                "Contacted hasn't been confirmed for continuity",
+                'Contacted, has confirmed',
+                'Discontinue/permanent Inactive'
+              ].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+            <select value={batchFilter} onChange={e => setBatchFilter(e.target.value)} style={{ width: 'auto' }}>
+              <option value="all">All Batches</option>
+              {batches.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
             </select>
           </div>
           <Link href="/students/new">
@@ -135,19 +253,28 @@ export default function StudentsPage() {
         )}
       </div>
 
-      <Modal 
-        open={editModalOpen} 
-        onClose={() => setEditModalOpen(false)} 
+      <Modal
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
         title={`Edit Student: ${selectedStudent?.name}`}
         size="md"
       >
         {selectedStudent && (
-          <StudentForm 
-            initialData={selectedStudent} 
-            onSubmit={handleUpdate} 
-            loading={updating}
-            submitLabel="Update Student"
-          />
+          enrollmentsLoading ? (
+            <div className="space-y-3 py-4">
+              {[1,2,3].map(i => <div key={i} className="h-12 bg-[#141722] rounded-xl animate-pulse border border-[#1e2130]" />)}
+            </div>
+          ) : (
+            <StudentForm
+              initialData={selectedStudent}
+              onSubmit={handleUpdate}
+              loading={updating}
+              submitLabel="Update Student"
+              batches={batches}
+              subjects={subjects}
+              existingEnrollments={selectedEnrollments}
+            />
+          )
         )}
       </Modal>
     </div>

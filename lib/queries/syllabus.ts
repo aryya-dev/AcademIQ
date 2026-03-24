@@ -1,13 +1,14 @@
 import { supabase } from '@/lib/supabase';
 import type { SyllabusTracker } from '@/types';
 
-export async function getSyllabus(subjectId?: string, batchId?: string) {
+export async function getSyllabus(subjectId?: string, batchId?: string, teacherId?: string) {
   let query = supabase
     .from('syllabus_tracker')
-    .select('*, subjects(*), batches(*)')
+    .select('*, subjects(*), batches(*), teachers(*)')
     .order('created_at');
   if (subjectId) query = query.eq('subject_id', subjectId);
   if (batchId) query = query.eq('batch_id', batchId);
+  if (teacherId) query = query.eq('teacher_id', teacherId);
   const { data, error } = await query;
   if (error) throw error;
   return data as SyllabusTracker[];

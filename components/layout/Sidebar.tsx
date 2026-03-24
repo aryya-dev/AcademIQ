@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, BookOpen, Layers, GitMerge,
-  CalendarCheck, FileText, BookMarked, MessageCircle, Award, GraduationCap, Activity, UserCog
+  CalendarCheck, FileText, BookMarked, MessageCircle, Award, GraduationCap, Activity, UserCog, ClipboardList
 } from 'lucide-react';
 import { useRole } from '@/hooks/useRole';
 
@@ -18,6 +18,7 @@ const navItems = [
   { href: '/communications', label: 'Communications', icon: MessageCircle },
   { href: '/merit', label: 'Merit / Demerit', icon: Award },
   { href: '/scoreboard', label: 'Scoreboard', icon: Activity },
+  { href: '/trackers', label: 'Trackers', icon: ClipboardList },
 ];
 
 export default function Sidebar() {

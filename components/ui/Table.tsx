@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 interface Column<T> {
   key: string;
   header: string;
-  render?: (row: T) => ReactNode;
+  render?: (row: T, index: number) => ReactNode;
 }
 
 interface TableProps<T> {
@@ -11,10 +11,11 @@ interface TableProps<T> {
   data: T[];
   emptyMessage?: string;
   getKey?: (row: T) => string;
+  onRowClick?: (row: T) => void;
 }
 
 export default function Table<T extends Record<string, unknown>>({
-  columns, data, emptyMessage = 'No data found.', getKey
+  columns, data, emptyMessage = 'No data found.', getKey, onRowClick
 }: TableProps<T>) {
   return (
     <div className="w-full overflow-x-auto rounded-xl border border-[#1e2130]">
@@ -42,11 +43,12 @@ export default function Table<T extends Record<string, unknown>>({
             data.map((row, i) => (
               <tr
                 key={getKey ? getKey(row) : i}
-                className="border-b border-[#1e2130] last:border-0 hover:bg-[#1a1f30] transition-colors"
+                onClick={() => onRowClick?.(row)}
+                className={`border-b border-[#1e2130] last:border-0 hover:bg-[#1a1f30] transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
               >
                 {columns.map(col => (
                   <td key={col.key} className="px-4 py-3 text-[#d1d5db]">
-                    {col.render ? col.render(row) : (row[col.key] as ReactNode)}
+                    {col.render ? col.render(row, i) : (row[col.key] as ReactNode)}
                   </td>
                 ))}
               </tr>

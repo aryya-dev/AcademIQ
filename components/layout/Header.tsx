@@ -10,9 +10,10 @@ import { getAlerts, type AppAlert } from '@/lib/queries/alerts';
 interface HeaderProps {
   title: string;
   subtitle?: string;
+  action?: React.ReactNode;
 }
 
-export default function Header({ title, subtitle }: HeaderProps) {
+export default function Header({ title, subtitle, action }: HeaderProps) {
   const [user, setUser] = useState<any>(null);
   const supabase = createClient();
   const router = useRouter();
@@ -44,6 +45,7 @@ export default function Header({ title, subtitle }: HeaderProps) {
         {subtitle && <p className="text-[#6b7280] text-xs mt-0.5">{subtitle}</p>}
       </div>
       <div className="flex items-center gap-3">
+        {action && <div className="mr-2">{action}</div>}
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4b5563]" />
           <input

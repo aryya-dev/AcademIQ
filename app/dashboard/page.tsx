@@ -93,11 +93,8 @@ export default function DashboardPage() {
             color="amber"
             trend="Need attention"
           />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Students */}
-          <Card>
+                {/* Recent Students */}
+          <Card h-full>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-white font-semibold">Recent Students</h2>
               <a href="/students" className="text-violet-400 text-xs hover:underline">View all →</a>
@@ -130,18 +127,57 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          {/* Global Weak Students list (Moved to Mentor Dashboard below if mentor) */}
-          {!mentorData && (
-            <Card className="border-red-500/20">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-white font-semibold flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4 text-red-400" /> Weak Students (&lt;40% Avg)
-                </h2>
-                <Badge variant="danger">System Wide</Badge>
+          {/* Missing Info Alerts [NEW] */}
+          <Card className="border-red-500/20">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-white font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500" /> Data Completion Alerts
+              </h2>
+              <a href="/trackers/information" className="text-violet-400 text-xs hover:underline">Full Tracker →</a>
+            </div>
+            {loading ? (
+              <div className="space-y-3">
+                {[1,2,3].map(i => <div key={i} className="h-10 bg-[#1e2130] rounded-lg animate-pulse" />)}
               </div>
-              <p className="text-[#4b5563] text-sm text-center py-4">Detailed weak student tracking is exclusively available in the Mentor view.</p>
-            </Card>
-          )}
+            ) : (
+              <div className="space-y-2 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
+                {students.filter(s => {
+                  const hasEnrollments = (s as any).enrollment_count > 0;
+                  return !s.parent_phone || !s.school_name || !s.class || !hasEnrollments;
+                }).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-emerald-500/50 bg-emerald-500/5 rounded-xl border border-dashed border-emerald-500/20">
+                    <CheckCircle className="w-8 h-8 mb-2" />
+                    <p className="text-xs">All profiles are fully updated!</p>
+                  </div>
+                ) : (
+                  students.filter(s => {
+                    const hasEnrollments = s.enrollments && s.enrollments.length > 0;
+                    return !s.parent_phone || !s.school_name || !s.class || !hasEnrollments;
+                  }).slice(0, 8).map(s => (
+                    <a key={s.id} href={`/students/${s.id}`} className="flex items-center justify-between p-3 rounded-lg bg-[#0f1117] border border-[#1e2130] hover:border-red-500/30 transition-all group">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+                        <div>
+                          <p className="text-[#d1d5db] text-sm font-medium group-hover:text-white">{s.name}</p>
+                          <p className="text-[#6b7280] text-[10px]">
+                            Missing: {[
+                              !s.parent_phone && 'Phone',
+                              !s.school_name && 'School',
+                              !s.class && 'Class',
+                              !(s.enrollments && s.enrollments.length > 0) && 'Batch'
+                            ].filter(Boolean).join(', ')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 text-[10px] font-bold">
+                        !
+                      </div>
+                    </a>
+                  ))
+                )}
+              </div>
+            )}
+          </Card>
         </div>
 
         {/* Overdue Evaluations */}

@@ -4,7 +4,7 @@ import type { Student } from '@/types';
 export async function getStudents() {
   const { data, error } = await supabase
     .from('students')
-    .select('*')
+    .select('*, enrollments(batches(id, name))')
     .order('name');
   if (error) throw error;
   return data as Student[];

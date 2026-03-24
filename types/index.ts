@@ -2,7 +2,13 @@
 // CORE ENTITY TYPES
 // ============================================================
 
-export type StudentStatus = 'active' | 'inactive' | 'on_leave';
+export type StudentStatus = 
+  | 'April Joinee'
+  | 'Not contacted'
+  | "Contacted hasn't been confirmed for continuity"
+  | 'Contacted, has confirmed'
+  | 'Discontinue/permanent Inactive'
+  | 'active' | 'inactive' | 'on_leave';
 
 export interface Student {
   id: string;
@@ -10,9 +16,11 @@ export interface Student {
   class: string;
   school_name: string;
   parent_phone: string;
-  status: StudentStatus;
+  status: string; // Changed to string for maximum flexibility since we have many custom statuses now.
   mentor_id?: string;
   created_at?: string;
+  // Joined via enrollments → batches
+  enrollments?: { batches: { id: string; name: string } | null }[];
 }
 
 export interface Batch {
@@ -118,12 +126,14 @@ export interface SyllabusTracker {
   id: string;
   subject_id: string;
   batch_id: string;
+  teacher_id?: string;
   chapter: string;
   status: SyllabusStatus;
   completed_date?: string;
   created_at?: string;
   subject?: Subject;
   batch?: Batch;
+  teacher?: Teacher;
 }
 
 // ============================================================
