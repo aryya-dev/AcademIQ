@@ -15,7 +15,7 @@ export default function SyllabusTrackerPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Filters
   const [selectedTeacher, setSelectedTeacher] = useState('all');
   const [selectedBatch, setSelectedBatch] = useState('all');
@@ -58,7 +58,7 @@ export default function SyllabusTrackerPage() {
   return (
     <div>
       <Header title="Syllabus Status Tracker" subtitle="Monitor course completion across all teachers and batches" />
-      
+
       <div className="p-6 space-y-6">
         {/* Progress Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -103,7 +103,7 @@ export default function SyllabusTrackerPage() {
             <Filter className="w-4 h-4" />
             <span>Filters:</span>
           </div>
-          <select 
+          <select
             className="bg-[#0f1117] border-[#1e2130] w-auto h-9 text-xs"
             value={selectedTeacher}
             onChange={e => setSelectedTeacher(e.target.value)}
@@ -111,7 +111,7 @@ export default function SyllabusTrackerPage() {
             <option value="all">All Teachers</option>
             {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
-          <select 
+          <select
             className="bg-[#0f1117] border-[#1e2130] w-auto h-9 text-xs"
             value={selectedBatch}
             onChange={e => setSelectedBatch(e.target.value)}
@@ -124,23 +124,22 @@ export default function SyllabusTrackerPage() {
         {/* List */}
         {loading ? (
           <div className="space-y-3">
-            {[1,2,3,4,5].map(i => <div key={i} className="h-16 bg-[#141722] border border-[#1e2130] rounded-xl animate-pulse" />)}
+            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-[#141722] border border-[#1e2130] rounded-xl animate-pulse" />)}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {filtered.map(item => (
-              <div 
-                key={item.id} 
+              <div
+                key={item.id}
                 className="group flex items-center gap-4 p-4 bg-[#141722] border border-[#1e2130] rounded-xl hover:border-violet-500/30 transition-all hover:bg-[#1a1f30]"
               >
-                <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                  item.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
-                  item.status === 'in_progress' ? 'bg-amber-500/10 text-amber-500' : 
-                  'bg-[#1e2130] text-[#4b5563]'
-                }`}>
-                  {item.status === 'completed' ? <CheckCircle className="w-5 h-5" /> : 
-                   item.status === 'in_progress' ? <Clock className="w-5 h-5" /> : 
-                   <BookMarked className="w-5 h-5" />}
+                <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${item.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
+                    item.status === 'in_progress' ? 'bg-amber-500/10 text-amber-500' :
+                      'bg-[#1e2130] text-[#4b5563]'
+                  }`}>
+                  {item.status === 'completed' ? <CheckCircle className="w-5 h-5" /> :
+                    item.status === 'in_progress' ? <Clock className="w-5 h-5" /> :
+                      <BookMarked className="w-5 h-5" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className={`font-semibold text-sm truncate ${item.status === 'completed' ? 'text-[#6b7280] line-through' : 'text-white'}`}>
@@ -149,14 +148,14 @@ export default function SyllabusTrackerPage() {
                   <div className="flex items-center gap-2 text-[11px] text-[#4b5563] mt-0.5">
                     <span className="text-[#9ca3af] font-medium">{item.teacher?.name || 'Unassigned'}</span>
                     <span>•</span>
-                    <span>{item.subjects?.name}</span>
+                    <span>{item.subject?.name}</span>
                     <span>•</span>
-                    <span>{item.batches?.name}</span>
+                    <span>{item.batch?.name}</span>
                   </div>
                 </div>
                 <Badge variant={
-                  item.status === 'completed' ? 'emerald' : 
-                  item.status === 'in_progress' ? 'amber' : 'secondary'
+                  item.status === 'completed' ? 'emerald' :
+                    item.status === 'in_progress' ? 'amber' : 'secondary'
                 } className="text-[10px] h-6">
                   {item.status.replace('_', ' ')}
                 </Badge>
