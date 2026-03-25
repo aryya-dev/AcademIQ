@@ -16,6 +16,7 @@ const BATCH_ORDER = [
 ];
 
 const STATUS_OPTIONS = [
+  'Active',
   'April Joinee',
   'Not contacted',
   "Contacted hasn't been confirmed for continuity",

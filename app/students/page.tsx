@@ -220,6 +220,7 @@ export default function StudentsPage() {
             >
               <option value="all">All Statuses</option>
               {[
+                'Active',
                 'April Joinee',
                 'Not contacted',
                 "Contacted hasn't been confirmed for continuity",

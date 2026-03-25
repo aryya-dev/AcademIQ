@@ -8,7 +8,7 @@ export type StudentStatus =
   | "Contacted hasn't been confirmed for continuity"
   | 'Contacted, has confirmed'
   | 'Discontinue/permanent Inactive'
-  | 'active' | 'inactive' | 'on_leave';
+  | 'Active' | 'active' | 'inactive' | 'on_leave';
 
 export interface Student {
   id: string;

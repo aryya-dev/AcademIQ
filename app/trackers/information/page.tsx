@@ -10,6 +10,7 @@ import { getStudents } from '@/lib/queries/students';
 import { getEnrollments } from '@/lib/queries/enrollments';
 
 const STATUS_FILTERS = [
+  'Active',
   'April Joinee',
   'Not contacted',
   "Contacted hasn't been confirmed for continuity",

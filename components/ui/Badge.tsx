@@ -37,6 +37,7 @@ export function statusBadge(status: string) {
     "Contacted hasn't been confirmed for continuity": 'warning',
     'Contacted, has confirmed': 'success',
     'Discontinue/permanent Inactive': 'secondary',
+    'Active': 'success',
     
     // Legacy/Generic Statuses
     active: 'success',

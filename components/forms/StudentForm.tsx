@@ -109,6 +109,7 @@ export default function StudentForm({
               className="w-full bg-[#0a0c14] border-[#1e2130] rounded-xl py-3 text-white"
             >
               {[
+                'Active',
                 'April Joinee',
                 'Not contacted',
                 "Contacted hasn't been confirmed for continuity",
