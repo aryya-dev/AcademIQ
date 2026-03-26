@@ -1,36 +1,37 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, Fragment } from 'react';
 import Header from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { BookMarked, CheckCircle, Clock, AlertCircle, Filter } from 'lucide-react';
-import { getSyllabus } from '@/lib/queries/syllabus';
-import { getTeachers } from '@/lib/queries/teachers';
+import { Printer, Download, Save, Loader2, Filter } from 'lucide-react';
+import { getSubjects } from '@/lib/queries/subjects';
 import { getBatches } from '@/lib/queries/batches';
-import type { SyllabusTracker, Teacher, Batch } from '@/types';
+import { getEnrollments } from '@/lib/queries/enrollments';
+import { getSchoolTermSyllabus, upsertSchoolTermSyllabus } from '@/lib/queries/school_syllabus';
+import type { Subject, Batch, SchoolTermSyllabus } from '@/types';
+
+const TERMS = ['UT-1', 'Half Yearly', 'UT-2', 'Annual Term'];
 
 export default function SyllabusTrackerPage() {
-  const [syllabus, setSyllabus] = useState<SyllabusTracker[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [selectedBatch, setSelectedBatch] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Filters
-  const [selectedTeacher, setSelectedTeacher] = useState('all');
-  const [selectedBatch, setSelectedBatch] = useState('all');
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [syllabusData, setSyllabusData] = useState<SchoolTermSyllabus[]>([]);
+  const [localEdits, setLocalEdits] = useState<Record<string, any>>({});
 
-  async function load() {
-    setLoading(true);
+  async function loadInitial() {
     try {
-      const [s, t, b] = await Promise.all([
-        getSyllabus(),
-        getTeachers(),
-        getBatches()
-      ]);
-      setSyllabus(s);
-      setTeachers(t);
+      const [s, b] = await Promise.all([getSubjects(), getBatches()]);
+      setSubjects(s);
       setBatches(b);
+      if (s.length > 0) setSelectedSubject(s[0].id);
+      if (b.length > 0) setSelectedBatch(b[0].id);
     } catch (err) {
       console.error(err);
     } finally {
@@ -38,140 +39,294 @@ export default function SyllabusTrackerPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { loadInitial(); }, []);
 
-  const filtered = syllabus.filter(item => {
-    if (selectedTeacher !== 'all' && item.teacher_id !== selectedTeacher) return false;
-    if (selectedBatch !== 'all' && item.batch_id !== selectedBatch) return false;
-    return true;
-  });
+  const selectedBatchObj = useMemo(() => batches.find(b => b.id === selectedBatch), [batches, selectedBatch]);
+  const selectedSubjectObj = useMemo(() => subjects.find(s => s.id === selectedSubject), [subjects, selectedSubject]);
 
-  const stats = {
-    total: filtered.length,
-    completed: filtered.filter(i => i.status === 'completed').length,
-    inProgress: filtered.filter(i => i.status === 'in_progress').length,
-    pending: filtered.filter(i => i.status === 'pending').length,
+  async function loadData() {
+    if (!selectedBatch || !selectedSubject) return;
+    setLoading(true);
+    try {
+      // Get all enrollments for this batch and subject
+      const allEnrollments = await getEnrollments();
+      const filtered = allEnrollments.filter((e: any) => 
+        e.batch_id === selectedBatch && 
+        e.subject_id === selectedSubject &&
+        e.students?.status !== 'Discontinue/permanent Inactive'
+      );
+      setEnrollments(filtered);
+
+      // Get existing syllabus for this class and subject
+      if (selectedBatchObj) {
+        const existing = await getSchoolTermSyllabus(selectedBatchObj.class, selectedSubject);
+        setSyllabusData(existing);
+        
+        // Populate local edits
+        const edits: Record<string, any> = {};
+        existing.forEach(item => {
+          const key = `${item.school_name}-${item.term}`;
+          edits[`${key}-syllabus`] = item.syllabus;
+          edits[`${key}-date`] = item.exam_date;
+        });
+        setLocalEdits(edits);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+  }, [selectedBatch, selectedSubject, selectedBatchObj]);
+
+  // Group students by school
+    const groupedData = useMemo(() => {
+      const groups: Record<string, Record<string, any>> = {};
+      enrollments.forEach(e => {
+        const school = e.students?.school_name || 'No School';
+        const sid = e.students?.id;
+        if (sid) {
+          if (!groups[school]) groups[school] = {};
+          groups[school][sid] = e.students;
+        }
+      });
+      
+      // Sort schools alphabetically
+      return Object.keys(groups).sort().map(school => ({
+        school,
+        students: Object.values(groups[school]).sort((a, b) => a.name.localeCompare(b.name))
+      }));
+    }, [enrollments]);
+
+  const handleEdit = (school: string, term: string, field: 'syllabus' | 'date', value: string) => {
+    setLocalEdits(prev => ({
+      ...prev,
+      [`${school}-${term}-${field}`]: value
+    }));
   };
 
-  const completionPct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+  const handleSave = async () => {
+    if (!selectedBatchObj || !selectedSubject) return;
+    setSaving(true);
+    try {
+      const schools = groupedData.map(g => g.school);
+      const promises: Promise<any>[] = [];
+
+      schools.forEach(school => {
+        TERMS.forEach(term => {
+          const syllabus = localEdits[`${school}-${term}-syllabus`];
+          const date = localEdits[`${school}-${term}-date`];
+          
+          if (syllabus !== undefined || date !== undefined) {
+            promises.push(upsertSchoolTermSyllabus({
+              school_name: school,
+              class: selectedBatchObj.class,
+              subject_id: selectedSubject,
+              term,
+              syllabus: syllabus || '',
+              exam_date: date || null
+            }));
+          }
+        });
+      });
+
+      await Promise.all(promises);
+      await loadData();
+      alert('Syllabus updated successfully!');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePrint = () => window.print();
+
+  const handleExport = () => {
+    const headings = ['SL No.', 'School', 'Student Name', ...TERMS.flatMap(t => [`${t} Syllabus`, `${t} Date`])];
+    const rows: any[] = [];
+    let slNo = 1;
+
+    groupedData.forEach(group => {
+      group.students.forEach((student, idx) => {
+        const row = [
+          slNo++,
+          idx === 0 ? group.school : '',
+          student.name,
+          ...TERMS.flatMap(term => [
+            localEdits[`${group.school}-${term}-syllabus`] || '',
+            localEdits[`${group.school}-${term}-date`] || ''
+          ])
+        ];
+        rows.push(row);
+      });
+    });
+
+    const csvContent = [
+      headings.join(','),
+      ...rows.map(row => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Syllabus_Tracker_${selectedBatchObj?.name}_${selectedSubjectObj?.name}.csv`;
+    link.click();
+  };
 
   return (
-    <div>
-      <Header title="Syllabus Status Tracker" subtitle="Monitor course completion across all teachers and batches" />
+    <div className="min-h-screen bg-[#0a0c10]">
+      <Header title="Syllabus Tracker" subtitle="Manage school-wise exam syllabus and dates" />
 
       <div className="p-6 space-y-6">
-        {/* Progress Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-violet-600/10 to-transparent">
-            <span className="text-3xl font-bold text-violet-400">{completionPct}%</span>
-            <span className="text-[#6b7280] text-xs uppercase tracking-wider mt-1 font-medium">Total Completion</span>
-          </Card>
-          <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="p-4 border-l-4 border-l-emerald-500">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-emerald-500" />
-                <div>
-                  <div className="text-xl font-bold text-white">{stats.completed}</div>
-                  <div className="text-xs text-[#6b7280]">Chapters Done</div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4 border-l-4 border-l-amber-500">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-amber-500" />
-                <div>
-                  <div className="text-xl font-bold text-white">{stats.inProgress}</div>
-                  <div className="text-xs text-[#6b7280]">In Progress</div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4 border-l-4 border-l-[#1e2130]">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-[#4b5563]" />
-                <div>
-                  <div className="text-xl font-bold text-white">{stats.pending}</div>
-                  <div className="text-xs text-[#6b7280]">Pending</div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </div>
+        {/* Filters and Actions */}
+        <Card className="p-4 flex flex-wrap items-center justify-between gap-4 border-[#1e2130] bg-[#141722] print:hidden">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-[#9ca3af]" />
+              <span className="text-sm text-[#9ca3af] font-medium">Filters:</span>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase text-[#4b5563] font-bold ml-1">Class</p>
+              <Badge variant="violet" className="h-9 px-4 text-sm">{selectedBatchObj?.class || '—'}</Badge>
+            </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4 items-center bg-[#141722] p-4 rounded-xl border border-[#1e2130]">
-          <div className="flex items-center gap-2 text-[#9ca3af] text-sm mr-2">
-            <Filter className="w-4 h-4" />
-            <span>Filters:</span>
-          </div>
-          <select
-            className="bg-[#0f1117] border-[#1e2130] w-auto h-9 text-xs"
-            value={selectedTeacher}
-            onChange={e => setSelectedTeacher(e.target.value)}
-          >
-            <option value="all">All Teachers</option>
-            {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          <select
-            className="bg-[#0f1117] border-[#1e2130] w-auto h-9 text-xs"
-            value={selectedBatch}
-            onChange={e => setSelectedBatch(e.target.value)}
-          >
-            <option value="all">All Batches</option>
-            {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        </div>
-
-        {/* List */}
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-[#141722] border border-[#1e2130] rounded-xl animate-pulse" />)}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3">
-            {filtered.map(item => (
-              <div
-                key={item.id}
-                className="group flex items-center gap-4 p-4 bg-[#141722] border border-[#1e2130] rounded-xl hover:border-violet-500/30 transition-all hover:bg-[#1a1f30]"
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase text-[#4b5563] font-bold ml-1">Batch</p>
+              <select
+                value={selectedBatch}
+                onChange={e => setSelectedBatch(e.target.value)}
+                className="bg-[#0f1117] border-[#1e2130] rounded-lg h-9 px-3 text-xs text-white focus:border-violet-500 outline-none min-w-[140px]"
               >
-                <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${item.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
-                    item.status === 'in_progress' ? 'bg-amber-500/10 text-amber-500' :
-                      'bg-[#1e2130] text-[#4b5563]'
-                  }`}>
-                  {item.status === 'completed' ? <CheckCircle className="w-5 h-5" /> :
-                    item.status === 'in_progress' ? <Clock className="w-5 h-5" /> :
-                      <BookMarked className="w-5 h-5" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className={`font-semibold text-sm truncate ${item.status === 'completed' ? 'text-[#6b7280] line-through' : 'text-white'}`}>
-                    {item.chapter}
-                  </h4>
-                  <div className="flex items-center gap-2 text-[11px] text-[#4b5563] mt-0.5">
-                    <span className="text-[#9ca3af] font-medium">{item.teacher?.name || 'Unassigned'}</span>
-                    <span>•</span>
-                    <span>{item.subject?.name}</span>
-                    <span>•</span>
-                    <span>{item.batch?.name}</span>
-                  </div>
-                </div>
-                <Badge variant={
-                  item.status === 'completed' ? 'emerald' :
-                    item.status === 'in_progress' ? 'amber' : 'secondary'
-                } className="text-[10px] h-6">
-                  {item.status.replace('_', ' ')}
-                </Badge>
+                {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase text-[#4b5563] font-bold ml-1">Subject</p>
+              <select
+                value={selectedSubject}
+                onChange={e => setSelectedSubject(e.target.value)}
+                className="bg-[#0f1117] border-[#1e2130] rounded-lg h-9 px-3 text-xs text-white focus:border-violet-500 outline-none min-w-[140px]"
+              >
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase text-[#4b5563] font-bold ml-1">Faculty</p>
+              <div className="bg-[#0f1117] border border-[#1e2130] rounded-lg h-9 px-3 flex items-center text-xs text-[#4b5563] min-w-[120px]">
+                (Unfilled)
               </div>
-            ))}
-            {filtered.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-[#1e2130] rounded-full flex items-center justify-center mx-auto mb-4">
-                  <BookMarked className="w-8 h-8 text-[#4b5563]" />
-                </div>
-                <p className="text-[#6b7280]">No chapters found matching these filters.</p>
-              </div>
-            )}
+            </div>
           </div>
-        )}
+
+          <div className="flex items-center gap-2 pt-5">
+            <Button variant="secondary" size="sm" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>Print</Button>
+            <Button variant="secondary" size="sm" icon={<Download className="w-4 h-4" />} onClick={handleExport}>Export</Button>
+            <Button variant="primary" size="sm" icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </Card>
+
+        {/* Table */}
+        <div className="bg-[#141722] border border-[#1e2130] rounded-xl overflow-hidden shadow-2xl overflow-x-auto">
+          <table className="w-full border-collapse text-xs text-left">
+            <thead>
+              <tr className="bg-[#1e2130]/50 text-[#9ca3af] border-b border-[#1e2130]">
+                <th rowSpan={2} className="p-3 border-r border-[#1e2130] w-12 text-center">SI No.</th>
+                <th rowSpan={2} className="p-3 border-r border-[#1e2130] min-w-[150px]">School</th>
+                <th rowSpan={2} className="p-3 border-r border-[#1e2130] min-w-[150px]">Student Name</th>
+                {TERMS.map(term => (
+                  <th key={term} colSpan={2} className="p-3 border-r border-[#1e2130] text-center bg-violet-500/5 text-violet-400 font-bold uppercase tracking-wider">{term}</th>
+                ))}
+              </tr>
+              <tr className="bg-[#1e2130]/30 text-[#6b7280] border-b border-[#1e2130]">
+                {TERMS.map(term => (
+                  <Fragment key={`${term}-headers`}>
+                    <th className="p-2 border-r border-[#1e2130] text-center font-medium">Syllabus</th>
+                    <th className="p-2 border-r border-[#1e2130] text-center font-medium">Date</th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={3 + TERMS.length * 2} className="p-10 text-center text-[#4b5563]">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                    Loading data...
+                  </td>
+                </tr>
+              ) : groupedData.length === 0 ? (
+                <tr>
+                  <td colSpan={3 + TERMS.length * 2} className="p-10 text-center text-[#4b5563]">
+                    No students found for this batch and subject.
+                  </td>
+                </tr>
+              ) : (
+                groupedData.map((group) => (
+                  group.students.map((student, sIdx) => {
+                    const isFirst = sIdx === 0;
+                    const slNo = groupedData.slice(0, groupedData.indexOf(group)).reduce((acc, curr) => acc + curr.students.length, 0) + sIdx + 1;
+                    
+                    return (
+                      <tr key={student.id} className="border-b border-[#1e2130] hover:bg-[#1a1f30] transition-colors group">
+                        <td className="p-2 border-r border-[#1e2130] text-center text-[#9ca3af]">{slNo}</td>
+                        {isFirst ? (
+                          <td rowSpan={group.students.length} className="p-3 border-r border-[#1e2130] bg-[#141722] font-semibold text-white align-top">
+                            {group.school}
+                          </td>
+                        ) : null}
+                        <td className="p-3 border-r border-[#1e2130] text-[#d1d5db]">{student.name}</td>
+                        {TERMS.map(term => (
+                          <Fragment key={`${student.id}-${term}`}>
+                            <td className="p-0 border-r border-[#1e2130]">
+                              <textarea
+                                value={localEdits[`${group.school}-${term}-syllabus`] || ''}
+                                onChange={e => handleEdit(group.school, term, 'syllabus', e.target.value)}
+                                className="w-full bg-transparent p-2 resize-none focus:bg-violet-500/5 focus:outline-none min-h-[40px] text-[11px] text-[#9ca3af]"
+                                placeholder="Enter syllabus..."
+                                rows={2}
+                              />
+                            </td>
+                            <td className="p-0 border-r border-[#1e2130]">
+                              <input
+                                type="date"
+                                value={localEdits[`${group.school}-${term}-date`] || ''}
+                                onChange={e => handleEdit(group.school, term, 'date', e.target.value)}
+                                className="w-full bg-transparent p-2 focus:bg-violet-500/5 focus:outline-none text-[10px] text-[#9ca3af] [color-scheme:dark]"
+                              />
+                            </td>
+                          </Fragment>
+                        ))}
+                      </tr>
+                    );
+                  })
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      <style jsx global>{`
+        @media print {
+          body * { visibility: hidden; }
+          .min-h-screen, .min-h-screen * { visibility: visible; }
+          .print\:hidden { display: none !important; }
+          table { border-collapse: collapse !important; width: 100% !important; }
+          th, td { border: 1px solid #333 !important; color: black !important; background: white !important; }
+          th { background: #f0f0f0 !important; }
+          textarea, input { color: black !important; border: none !important; }
+        }
+      `}</style>
     </div>
   );
 }

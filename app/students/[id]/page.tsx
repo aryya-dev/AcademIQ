@@ -4,16 +4,17 @@ import Header from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import Badge, { statusBadge } from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import { getStudentById, updateStudent } from '@/lib/queries/students';
+import { getStudentById, updateStudent, deleteStudent, getStudentWithEnrollments } from '@/lib/queries/students';
 import Modal from '@/components/ui/Modal';
 import StudentForm from '@/components/forms/StudentForm';
-import { ArrowLeft, BookOpen, Calendar, TrendingUp, MessageCircle, Edit2, CalendarRange, Plus } from 'lucide-react';
-import { getEnrollmentsByStudent } from '@/lib/queries/enrollments';
+import { ArrowLeft, BookOpen, Calendar, TrendingUp, MessageCircle, Edit2, CalendarRange, Plus, Trash2 } from 'lucide-react';
+import { getEnrollmentsByStudent, createEnrollment, deleteEnrollment } from '@/lib/queries/enrollments';
 import { getStudentMarks } from '@/lib/queries/tests';
 import { getAttendanceByStudent } from '@/lib/queries/attendance';
 import { getParentLogsByStudent, getMentoringMessagesByStudent } from '@/lib/queries/communications';
 import { getSchoolExamsByStudent, addSchoolExam, type SchoolExam } from '@/lib/queries/exams';
-import type { Student } from '@/types';
+import { getSchoolTermSyllabusBySchool } from '@/lib/queries/school_syllabus';
+import type { Student, SchoolTermSyllabus } from '@/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -27,6 +28,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   const [parentLogs, setParentLogs] = useState<any[]>([]);
   const [mentoringMsgs, setMentoringMsgs] = useState<any[]>([]);
   const [exams, setExams] = useState<SchoolExam[]>([]);
+  const [syncedSyllabus, setSyncedSyllabus] = useState<SchoolTermSyllabus[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [examModalOpen, setExamModalOpen] = useState(false);
@@ -42,8 +44,18 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
       getParentLogsByStudent(id).catch(() => []),
       getMentoringMessagesByStudent(id).catch(() => []),
       getSchoolExamsByStudent(id).catch(() => []),
-    ]).then(([s, e, m, a, p, mm, ex]) => {
+    ]).then(async ([s, e, m, a, p, mm, ex]) => {
       setStudent(s); setEnrollments(e); setMarks(m); setAttendance(a); setParentLogs(p); setMentoringMsgs(mm); setExams(ex);
+      
+      // Fetch synced syllabus if student has school and class
+      if (s?.school_name && s?.class) {
+        try {
+          const sy = await getSchoolTermSyllabusBySchool(s.school_name, s.class);
+          setSyncedSyllabus(sy);
+        } catch (err) {
+          console.error('Failed to load synced syllabus:', err);
+        }
+      }
     }).catch((err) => {
       console.error('Failed to load student data:', err);
     }).finally(() => setLoading(false));
@@ -52,12 +64,56 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   const handleUpdate = async (updates: any) => {
     setUpdating(true);
     try {
-      const updated = await updateStudent(id, updates);
-      setStudent(updated);
+      // 1. Update basic student fields
+      await updateStudent(id, {
+        name: updates.name,
+        class: updates.class,
+        school_name: updates.school_name,
+        parent_phone: updates.parent_phone,
+        status: updates.status as any,
+      });
+
+      // 2. Sync enrollments
+      const currentEnrollments = await getEnrollmentsByStudent(id);
+      await Promise.all(currentEnrollments.map((e: any) => deleteEnrollment(e.id)));
+
+      const createPromises = updates.enrollments.flatMap((block: any) => 
+        block.selectedSubjectIds.map((sid: string) => 
+          createEnrollment({
+            student_id: id,
+            batch_id: block.batch_id,
+            subject_id: sid,
+            role: 'primary',
+          })
+        )
+      );
+      await Promise.all(createPromises);
+
+      // Refresh data
+      const { student: refreshedStudent, enrollments: refreshedEnrollments } = await getStudentWithEnrollments(id);
+      setStudent(refreshedStudent);
+      setEnrollments(refreshedEnrollments);
+      
       setEditModalOpen(false);
       router.refresh();
     } catch (err) {
       console.error(err);
+      alert('Failed to update student');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!student) return;
+    if (!confirm(`Are you sure you want to delete ${student.name}? This action cannot be undone.`)) return;
+    setUpdating(true);
+    try {
+      await deleteStudent(id);
+      router.push('/students');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete student');
     } finally {
       setUpdating(false);
     }
@@ -134,6 +190,15 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                 onClick={() => setEditModalOpen(true)}
               >
                 Edit Profile
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                icon={<Trash2 className="w-3.5 h-3.5" />}
+                onClick={handleDelete}
+              >
+                Delete
               </Button>
             </div>
           </div>
@@ -325,6 +390,47 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
               </div>
             )}
           </div>
+        </Card>
+
+        {/* Synced School Syllabus */}
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <BookOpen className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-white font-semibold">Synced Exam Syllabus ({student.school_name})</h3>
+          </div>
+          {syncedSyllabus.length === 0 ? (
+            <p className="text-[#4b5563] text-sm py-4 text-center">No synced syllabus available for this school/class.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {['UT-1', 'Half Yearly', 'UT-2', 'Annual Term'].map(term => {
+                const termSyllabus = syncedSyllabus.filter(s => s.term === term);
+                if (termSyllabus.length === 0) return null;
+                
+                return (
+                        <div key={term} className="space-y-3">
+                    <h4 className="text-violet-400 text-[10px] uppercase font-bold tracking-widest border-b border-[#1e2130] pb-1">{term}</h4>
+                    <div className="space-y-2">
+                      {termSyllabus
+                        .filter(s => enrollments.some(e => e.subject_id === s.subject_id))
+                        .map(s => (
+                          <div key={s.id} className="p-3 bg-[#1e2130] rounded-xl border border-[#2a2f45]">
+                            <div className="flex justify-between items-start gap-2 mb-1">
+                              <span className="text-white text-[11px] font-bold">{s.subject?.name}</span>
+                              {s.exam_date && (
+                                <span className="text-[#9ca3af] text-[9px] bg-[#141722] px-1.5 py-0.5 rounded border border-[#1e2130]">
+                                  {new Date(s.exam_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[#9ca3af] text-[10px] leading-relaxed whitespace-pre-wrap">{s.syllabus || 'No syllabus details'}</p>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       </div>
 

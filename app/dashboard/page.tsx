@@ -6,12 +6,13 @@ import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge, { statusBadge } from '@/components/ui/Badge';
 import {
-  Users, Layers, AlertTriangle, MessageCircle, Bell, CheckCircle, Clock, TrendingDown, Calendar, AlertCircle, CalendarRange
+  Users, Layers, AlertTriangle, MessageCircle, Bell, CheckCircle, Clock, TrendingDown, Calendar, AlertCircle, CalendarRange, Flag
 } from 'lucide-react';
 import { getStudents, getWeakStudents } from '@/lib/queries/students';
 import { getBatches } from '@/lib/queries/batches';
 import { getOverdueEvaluations } from '@/lib/queries/tests';
 import { getMentorDashboardData, type MentorDashboardData } from '@/lib/queries/mentor_dashboard';
+import { getRedFlags } from '@/lib/queries/attendance';
 import type { Student } from '@/types';
 import { useRole } from '@/hooks/useRole';
 import { useRouter } from 'next/navigation';
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   const [batchCount, setBatchCount] = useState(0);
   const [overdueTests, setOverdueTests] = useState<any[]>([]);
   const [mentorData, setMentorData] = useState<MentorDashboardData | null>(null);
+  const [globalRedFlags, setGlobalRedFlags] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,14 +36,16 @@ export default function DashboardPage() {
 
     async function load() {
       try {
-        const [s, b, o] = await Promise.all([
+        const [s, b, o, rf] = await Promise.all([
           getStudents().catch(() => []),
           getBatches().catch(() => []),
           getOverdueEvaluations().catch(() => []),
+          getRedFlags().catch(() => []),
         ]);
         setStudents(s);
         setBatchCount(b.length);
         setOverdueTests(o);
+        setGlobalRedFlags(rf);
 
         if (profile?.role === 'mentor' || profile?.role === 'knight') {
           const mData = await getMentorDashboardData(profile.id).catch(() => null);
@@ -93,23 +97,27 @@ export default function DashboardPage() {
             color="amber"
             trend="Need attention"
           />
-                {/* Recent Students */}
-          <Card h-full>
-            <div className="flex items-center justify-between mb-4">
+        </div>
+        
+        {/* Alerts & Recents Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Recent Students */}
+          <Card className="flex flex-col h-[400px]">
+            <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <h2 className="text-white font-semibold">Recent Students</h2>
               <a href="/students" className="text-violet-400 text-xs hover:underline">View all →</a>
             </div>
             {loading ? (
               <div className="space-y-3">
-                {[1,2,3].map(i => (
+                {[1,2,3,4].map(i => (
                   <div key={i} className="h-10 bg-[#1e2130] rounded-lg animate-pulse" />
                 ))}
               </div>
             ) : students.length === 0 ? (
-              <p className="text-[#4b5563] text-sm py-8 text-center">No students yet. <a href="/students/new" className="text-violet-400">Add one →</a></p>
+              <p className="text-[#4b5563] text-sm py-8 text-center flex-1 flex items-center justify-center">No students yet.</p>
             ) : (
-              <div className="space-y-2">
-                {students.slice(0, 5).map(s => (
+              <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                {students.slice(0, 10).map(s => (
                   <a key={s.id} href={`/students/${s.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-[#1e2130] transition-colors group">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
@@ -117,7 +125,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <p className="text-[#d1d5db] text-sm font-medium group-hover:text-white transition-colors">{s.name}</p>
-                        <p className="text-[#6b7280] text-xs">Class {s.class} • {s.school_name}</p>
+                        <p className="text-[#6b7280] text-[10px]">Class {s.class} • {s.school_name}</p>
                       </div>
                     </div>
                     <Badge variant={statusBadge(s.status)}>{s.status}</Badge>
@@ -127,33 +135,33 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          {/* Missing Info Alerts [NEW] */}
-          <Card className="border-red-500/20">
-            <div className="flex items-center justify-between mb-4">
+          {/* Data Completion Alerts */}
+          <Card className="border-red-500/20 flex flex-col h-[400px]">
+            <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <h2 className="text-white font-semibold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500" /> Data Completion Alerts
+                <AlertCircle className="w-4 h-4 text-red-500" /> Data Completion
               </h2>
               <a href="/trackers/information" className="text-violet-400 text-xs hover:underline">Full Tracker →</a>
             </div>
             {loading ? (
               <div className="space-y-3">
-                {[1,2,3].map(i => <div key={i} className="h-10 bg-[#1e2130] rounded-lg animate-pulse" />)}
+                {[1,2,3,4].map(i => <div key={i} className="h-10 bg-[#1e2130] rounded-lg animate-pulse" />)}
               </div>
             ) : (
-              <div className="space-y-2 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar flex-1">
                 {students.filter(s => {
-                  const hasEnrollments = (s as any).enrollment_count > 0;
+                  const hasEnrollments = s.enrollments && s.enrollments.length > 0;
                   return !s.parent_phone || !s.school_name || !s.class || !hasEnrollments;
                 }).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-emerald-500/50 bg-emerald-500/5 rounded-xl border border-dashed border-emerald-500/20">
+                  <div className="flex flex-col items-center justify-center h-full text-emerald-500/50 bg-emerald-500/5 rounded-xl border border-dashed border-emerald-500/20">
                     <CheckCircle className="w-8 h-8 mb-2" />
-                    <p className="text-xs">All profiles are fully updated!</p>
+                    <p className="text-xs">All profiles are regular!</p>
                   </div>
                 ) : (
                   students.filter(s => {
                     const hasEnrollments = s.enrollments && s.enrollments.length > 0;
                     return !s.parent_phone || !s.school_name || !s.class || !hasEnrollments;
-                  }).slice(0, 8).map(s => (
+                  }).map(s => (
                     <a key={s.id} href={`/students/${s.id}`} className="flex items-center justify-between p-3 rounded-lg bg-[#0f1117] border border-[#1e2130] hover:border-red-500/30 transition-all group">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
@@ -169,9 +177,46 @@ export default function DashboardPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 text-[10px] font-bold">
-                        !
+                    </a>
+                  ))
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Red Flags [ABSENCE] */}
+          <Card className="border-orange-500/20 flex flex-col h-[400px]">
+            <div className="flex items-center justify-between mb-2 flex-shrink-0">
+              <h2 className="text-white font-semibold flex items-center gap-2">
+                <Flag className="w-4 h-4 text-orange-500" /> Red Flags
+              </h2>
+              <Badge variant="danger">{globalRedFlags.length}</Badge>
+            </div>
+            <p className="text-[#6b7280] text-[10px] mb-4">Back-to-back 2 days absence in a subject</p>
+            {loading ? (
+              <div className="space-y-3">
+                {[1,2,3,4].map(i => <div key={i} className="h-10 bg-[#1e2130] rounded-lg animate-pulse" />)}
+              </div>
+            ) : (
+              <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                {globalRedFlags.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-[#4b5563] bg-[#0f1117] rounded-xl border border-dashed border-[#1e2130]">
+                    <CheckCircle className="w-8 h-8 mb-2 opacity-20" />
+                    <p className="text-xs">No attendance red flags today.</p>
+                  </div>
+                ) : (
+                  globalRedFlags.map((rf, idx) => (
+                    <a key={idx} href={`/students/${rf.student_id}`} className="block p-3 rounded-lg bg-[#141722] border border-orange-500/20 hover:border-orange-500/50 transition-all group">
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="text-[#d1d5db] text-sm font-bold group-hover:text-white">{rf.name}</p>
+                        <span className="text-orange-500 text-[9px] font-bold uppercase tracking-wider bg-orange-500/10 px-1.5 py-0.5 rounded">2x Absent</span>
                       </div>
+                      <p className="text-[#6b7280] text-[10px]">
+                        Class {rf.class} • {rf.batch}
+                      </p>
+                      <p className="text-violet-400 text-[10px] font-medium mt-1">
+                        Subject: {rf.subject}
+                      </p>
                     </a>
                   ))
                 )}

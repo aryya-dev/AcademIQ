@@ -59,3 +59,42 @@ export async function getAbsenteeReport(batchId: string, thresholdPct = 75) {
     .map(([id, v]) => ({ student_id: id, name: v.name, pct: Math.round((v.present / v.total) * 100) }))
     .filter((s: any) => s.pct < thresholdPct);
 }
+
+export async function getRedFlags() {
+  const { data: fullAtt, error } = await supabase
+    .from('attendance')
+    .select('student_id, subject_id, status, date, students(name, class), batches(name), subjects(name)')
+    .order('date', { ascending: false });
+
+  if (error) throw error;
+
+  const flagMap: Record<string, { count: number; data: any }> = {};
+  const redFlags: any[] = [];
+  const processed = new Set<string>();
+
+  fullAtt?.forEach((a: any) => {
+    const key = `${a.student_id}:${a.subject_id}`;
+    if (processed.has(key)) return;
+
+    if (!flagMap[key]) flagMap[key] = { count: 0, data: a };
+    
+    if (a.status === 'absent') {
+      flagMap[key].count++;
+    } else if (a.status === 'present' || a.status === 'no_class') {
+      processed.add(key);
+    }
+
+    if (flagMap[key].count >= 2) {
+      redFlags.push({
+        student_id: a.student_id,
+        name: a.students?.name || '',
+        class: a.students?.class || '',
+        batch: a.batches?.name || '',
+        subject: a.subjects?.name || ''
+      });
+      processed.add(key);
+    }
+  });
+
+  return redFlags;
+}

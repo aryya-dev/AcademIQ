@@ -136,6 +136,18 @@ export interface SyllabusTracker {
   teacher?: Teacher;
 }
 
+export interface SchoolTermSyllabus {
+  id: string;
+  school_name: string;
+  class: string;
+  subject_id: string;
+  term: string;
+  syllabus: string;
+  exam_date: string;
+  created_at?: string;
+  subject?: Subject;
+}
+
 // ============================================================
 // COMMUNICATION
 // ============================================================
@@ -198,3 +210,17 @@ export interface StudentPerformance {
   attendance_pct: number;
   enrollment_count: number;
 }
+export interface SchoolExamMarks {
+  id: string;
+  student_id: string;
+  term: string;
+  physics: number;
+  chemistry: number;
+  math: number;
+  biology: number;
+  computer: number;
+  created_at?: string;
+  student?: Student;
+}
+
+export type SchoolExamMarksUpdate = Partial<Omit<SchoolExamMarks, 'id' | 'student_id' | 'created_at'>>;

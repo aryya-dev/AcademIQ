@@ -6,7 +6,7 @@ import Header from '@/components/layout/Header';
 import Table from '@/components/ui/Table';
 import Badge, { statusBadge } from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import { getStudents, updateStudent } from '@/lib/queries/students';
+import { getStudents, updateStudent, deleteStudent } from '@/lib/queries/students';
 import { getBatches } from '@/lib/queries/batches';
 import { getSubjects } from '@/lib/queries/subjects';
 import { getEnrollmentsByStudent, createEnrollment, deleteEnrollment } from '@/lib/queries/enrollments';
@@ -14,7 +14,7 @@ import type { Student, Batch, Subject } from '@/types';
 import Link from 'next/link';
 import Modal from '@/components/ui/Modal';
 import StudentForm from '@/components/forms/StudentForm';
-import { Edit2, Plus, Search, User } from 'lucide-react';
+import { Edit2, Plus, Search, User, Trash2 } from 'lucide-react';
 
 interface EnrollmentEntry {
   id: string;
@@ -96,6 +96,16 @@ export default function StudentsPage() {
     }
   }
 
+  async function handleDelete(studentId: string, studentName: string) {
+    if (!confirm(`Are you sure you want to delete ${studentName}?`)) return;
+    try {
+      await deleteStudent(studentId);
+      setStudents(prev => prev.filter(s => s.id !== studentId));
+    } catch (err) {
+      alert('Failed to delete student');
+    }
+  }
+
   const columns = [
     {
       key: 'name', header: 'Student',
@@ -141,6 +151,14 @@ export default function StudentsPage() {
           <Link href={`/students/${s.id}`}>
             <Button variant="ghost" size="sm" icon={<User className="w-3.5 h-3.5" />}>Profile</Button>
           </Link>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10" 
+            onClick={() => handleDelete(s.id, s.name)}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
         </div>
       )
     },
@@ -149,8 +167,7 @@ export default function StudentsPage() {
   async function handleUpdate(updates: {
     name: string; class: string; school_name: string;
     parent_phone: string; status: string;
-    batch_id: string; selectedSubjectIds: string[];
-    existingEnrollments?: EnrollmentEntry[];
+    enrollments: { batch_id: string; selectedSubjectIds: string[] }[];
   }) {
     if (!selectedStudent) return;
     setUpdating(true);
@@ -164,26 +181,25 @@ export default function StudentsPage() {
         status: updates.status as any,
       });
 
-      // 2. Sync enrollments (only if batch/subjects were shown)
-      const existing = updates.existingEnrollments || [];
-      if (updates.batch_id) {
-        // Delete all old enrollments
-        await Promise.all(existing.map(e => deleteEnrollment(e.id)));
-        // Create new enrollments for each selected subject
-        await Promise.all(
-          updates.selectedSubjectIds.map(sid =>
-            createEnrollment({
-              student_id: selectedStudent.id,
-              batch_id: updates.batch_id,
-              subject_id: sid,
-              role: 'primary',
-            })
-          )
-        );
-      } else if (existing.length > 0 && updates.selectedSubjectIds.length === 0) {
-        // User cleared all subjects — remove all enrollments
-        await Promise.all(existing.map(e => deleteEnrollment(e.id)));
-      }
+      // 2. Sync enrollments
+      // Get current enrollments to identify what to delete
+      const currentEnrollments = await getEnrollmentsByStudent(selectedStudent.id);
+      
+      // Delete all existing enrollments for this student (simplest sync approach)
+      await Promise.all(currentEnrollments.map((e: any) => deleteEnrollment(e.id)));
+
+      // Create new enrollments from the blocks
+      const createPromises = updates.enrollments.flatMap(block => 
+        block.selectedSubjectIds.map(sid => 
+          createEnrollment({
+            student_id: selectedStudent.id,
+            batch_id: block.batch_id,
+            subject_id: sid,
+            role: 'primary',
+          })
+        )
+      );
+      await Promise.all(createPromises);
 
       setEditModalOpen(false);
       // Refresh the list
@@ -192,6 +208,7 @@ export default function StudentsPage() {
       router.refresh();
     } catch (err) {
       console.error(err);
+      alert('Failed to update student');
     } finally {
       setUpdating(false);
     }

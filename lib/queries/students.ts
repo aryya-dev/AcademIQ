@@ -5,7 +5,8 @@ export async function getStudents() {
   const { data, error } = await supabase
     .from('students')
     .select('*, enrollments(batches(id, name))')
-    .order('name');
+    .order('name')
+    .range(0, 999);
   if (error) throw error;
   return data as Student[];
 }

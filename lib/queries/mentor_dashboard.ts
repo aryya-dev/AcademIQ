@@ -6,6 +6,7 @@ export interface MentorDashboardData {
   upcomingExams: { id: string; student_id: string; student_name: string; subject: string; exam_date: string; notes: string | null }[];
   uncontactedParents: { id: string; name: string }[];
   missingMessages: { student_id: string; name: string; missing: string[] }[];
+  redFlags: { student_id: string; name: string; class: string; batch: string; subject: string }[];
 }
 
 export async function getMentorDashboardData(mentorId: string): Promise<MentorDashboardData> {
@@ -20,7 +21,7 @@ export async function getMentorDashboardData(mentorId: string): Promise<MentorDa
   const studentIds = (students || []).map((s: any) => s.id);
 
   if (studentIds.length === 0) {
-    return { weakStudents: [], lowAttendance: [], upcomingExams: [], uncontactedParents: [], missingMessages: [] };
+    return { weakStudents: [], lowAttendance: [], upcomingExams: [], uncontactedParents: [], missingMessages: [], redFlags: [] };
   }
 
   // 2. Fetch Weak Students (<40% avg)
@@ -103,11 +104,48 @@ export async function getMentorDashboardData(mentorId: string): Promise<MentorDa
     return { student_id: s.id, name: s.name, missing };
   }).filter((s: any) => s.missing.length > 0);
 
+  // 7. Red Flags (2 consecutive absences for the same subject)
+  const { data: fullAtt } = await supabase
+    .from('attendance')
+    .select('student_id, subject_id, status, date, students(name, class), batches(name), subjects(name)')
+    .in('student_id', studentIds)
+    .order('date', { ascending: false });
+
+  const flagMap: Record<string, { count: number; data: any }> = {};
+  const redFlags: any[] = [];
+  const processed = new Set<string>();
+
+  fullAtt?.forEach((a: any) => {
+    const key = `${a.student_id}:${a.subject_id}`;
+    if (processed.has(key)) return;
+
+    if (!flagMap[key]) flagMap[key] = { count: 0, data: a };
+    
+    if (a.status === 'absent') {
+      flagMap[key].count++;
+    } else if (a.status === 'present' || a.status === 'no_class') {
+      // If we hit a non-absent record before reaching 2 absences, this subject is clear for now
+      processed.add(key);
+    }
+
+    if (flagMap[key].count >= 2) {
+      redFlags.push({
+        student_id: a.student_id,
+        name: a.students?.name || '',
+        class: a.students?.class || '',
+        batch: a.batches?.name || '',
+        subject: a.subjects?.name || ''
+      });
+      processed.add(key);
+    }
+  });
+
   return {
     weakStudents,
     lowAttendance,
     upcomingExams,
     uncontactedParents,
-    missingMessages
+    missingMessages,
+    redFlags
   };
 }

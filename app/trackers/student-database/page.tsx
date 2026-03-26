@@ -5,9 +5,9 @@ import { Card } from '@/components/ui/Card';
 import Table from '@/components/ui/Table';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { Printer, Search, Download } from 'lucide-react';
+import { Printer, Search, Download, Trash2 } from 'lucide-react';
 import { getEnrollments } from '@/lib/queries/enrollments';
-import { updateStudent } from '@/lib/queries/students';
+import { updateStudent, deleteStudent } from '@/lib/queries/students';
 
 // Custom batch order as requested
 const BATCH_ORDER = [
@@ -98,6 +98,16 @@ export default function StudentDatabaseTracker() {
     } catch (err) {}
   }
 
+  async function handleDelete(studentId: string, studentName: string) {
+    if (!confirm(`Are you sure you want to delete ${studentName}? This will remove all their enrollments and data permanently.`)) return;
+    try {
+      await deleteStudent(studentId);
+      setData(prev => prev.filter(s => s.id !== studentId));
+    } catch (err) {
+      alert('Failed to delete student');
+    }
+  }
+
   const filteredData = data.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.school_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -135,6 +145,16 @@ export default function StudentDatabaseTracker() {
         onChange={(e) => setData(prev => prev.map(item => item.id === s.id ? { ...item, remarks: e.target.value } : item))}
         className="bg-transparent border-b border-transparent hover:border-[#2a2f45] focus:border-violet-500 transition-colors text-xs w-full px-1"
       />
+    )},
+    { key: 'actions', header: '', render: (s: any) => (
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 p-0" 
+        onClick={() => handleDelete(s.id, s.name)}
+      >
+        <Trash2 className="w-4 h-4" />
+      </Button>
     )},
   ];
 
@@ -183,6 +203,24 @@ export default function StudentDatabaseTracker() {
       <Header title="Student Database" subtitle="Master roster with custom tracking" />
       
       <div className="p-6 space-y-4">
+        {/* Status Counters */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 print:hidden">
+          {STATUS_OPTIONS.map(status => {
+            const count = data.filter(s => s.status === status).length;
+            if (count === 0 && status !== 'Active') return null;
+            return (
+              <Card key={status} className="p-3 bg-[#141722] border-[#1e2130] flex flex-col items-center justify-center text-center">
+                <span className="text-xl font-bold text-violet-400">{count}</span>
+                <span className="text-[9px] uppercase tracking-wider text-[#6b7280] font-bold mt-1 leading-tight">{status}</span>
+              </Card>
+            );
+          })}
+          <Card className="p-3 bg-[#141722] border-[#1e2130] flex flex-col items-center justify-center text-center">
+            <span className="text-xl font-bold text-white">{data.length}</span>
+            <span className="text-[9px] uppercase tracking-wider text-[#6b7280] font-bold mt-1 leading-tight">Total Students</span>
+          </Card>
+        </div>
+
         <div className="flex flex-col sm:flex-row justify-between gap-4 print:hidden">
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4b5563]" />

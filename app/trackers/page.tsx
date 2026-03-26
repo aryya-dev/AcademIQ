@@ -17,11 +17,11 @@ export default function TrackersPage() {
       color: 'violet'
     },
     {
-      id: 'marks-report',
-      title: 'Marks Report',
-      description: 'Track academic performance, trends, and identify students needing extra care.',
+      id: 'marks',
+      title: 'Marks Tracker',
+      description: 'Track academic performance, trends, and individual subject marks for school exams.',
       icon: <FileText className="w-6 h-6 text-emerald-400" />,
-      href: '/trackers/marks-report',
+      href: '/trackers/marks',
       color: 'emerald'
     },
     {

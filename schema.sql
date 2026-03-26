@@ -77,7 +77,8 @@ create table if not exists attendance (
   batch_id uuid not null references batches(id) on delete cascade,
   date date not null,
   status text not null default 'present',
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique(student_id, subject_id, date)
 );
 
 -- ----------------------------------------------------------------
@@ -120,6 +121,35 @@ create table if not exists syllabus_tracker (
   status text default 'pending',
   completed_date date,
   created_at timestamptz default now()
+);
+
+-- ----------------------------------------------------------------
+-- SCHOOL TERM SYLLABUS
+-- ----------------------------------------------------------------
+
+create table if not exists school_term_syllabus (
+  id uuid primary key default gen_random_uuid(),
+  school_name text not null,
+  class text not null,
+  subject_id uuid not null references subjects(id) on delete cascade,
+  term text not null, -- 'UT-1', 'Half Yearly', 'UT-2', 'Annual Term'
+  syllabus text,
+  exam_date date,
+  created_at timestamptz default now(),
+  unique(school_name, class, subject_id, term)
+);
+
+create table if not exists school_exam_marks (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id) on delete cascade,
+  term text not null, -- 'UT-1', 'Half Yearly', 'UT-2', 'Annual'
+  physics numeric,
+  chemistry numeric,
+  math numeric,
+  biology numeric,
+  computer numeric,
+  created_at timestamptz default now(),
+  unique(student_id, term)
 );
 
 -- ----------------------------------------------------------------

@@ -5,7 +5,8 @@ export async function getEnrollments() {
   const { data, error } = await supabase
     .from('enrollments')
     .select('*, students(*), batches(*), subjects(*), teachers(*)')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(0, 1999);
   if (error) throw error;
   return data || [];
 }

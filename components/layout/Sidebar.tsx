@@ -14,7 +14,6 @@ const navItems = [
   { href: '/enrollments', label: 'Enrollments', icon: GitMerge },
   { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
   { href: '/tests', label: 'Tests & Marks', icon: FileText },
-  { href: '/syllabus', label: 'Syllabus Tracker', icon: BookMarked },
   { href: '/communications', label: 'Communications', icon: MessageCircle },
   { href: '/merit', label: 'Merit / Demerit', icon: Award },
   { href: '/scoreboard', label: 'Scoreboard', icon: Activity },
