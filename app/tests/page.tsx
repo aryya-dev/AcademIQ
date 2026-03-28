@@ -17,6 +17,7 @@ export default function TestsPage() {
   const [tests, setTests] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
+  const [classFilter, setClassFilter] = useState('all');
   const [overdueCount, setOverdueCount] = useState(0);
   const [openNew, setOpenNew] = useState(false);
   const [marksModal, setMarksModal] = useState<any | null>(null);
@@ -104,13 +105,24 @@ export default function TestsPage() {
     <div>
       <Header title="Tests & Marks" subtitle="Manage tests and student evaluations" />
       <div className="p-6 space-y-5">
-        <div className="flex items-center justify-between">
-          {overdueCount > 0 && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-              <AlertTriangle className="w-4 h-4" /> {overdueCount} overdue evaluations
-            </div>
-          )}
-          <div className="ml-auto">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {overdueCount > 0 && (
+              <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-4 h-4" /> {overdueCount} overdue evaluations
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3 ml-auto">
+            <select
+              value={classFilter}
+              onChange={e => setClassFilter(e.target.value)}
+              className="h-10 bg-[#0a0c14] border border-[#1e2130] rounded-xl px-4 text-white text-sm"
+            >
+              <option value="all">All Classes</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
             <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Create Test</Button>
           </div>
         </div>
@@ -121,7 +133,9 @@ export default function TestsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tests.map(t => {
+            {tests
+              .filter(t => classFilter === 'all' || t.batches?.class === classFilter)
+              .map(t => {
               const isOverdue = new Date(t.eval_deadline) < new Date();
               return (
                 <Card key={t.id} className={`${isOverdue ? 'border-red-500/30' : ''} hover:border-violet-500/40 transition-colors group relative`}>

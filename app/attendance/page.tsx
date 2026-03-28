@@ -16,6 +16,7 @@ export default function AttendancePage() {
   const [batches, setBatches] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [classFilter, setClassFilter] = useState('');
   const [batchFilter, setBatchFilter] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('');
   const [records, setRecords] = useState<Record<string, AttendanceStatus>>({});
@@ -37,6 +38,16 @@ export default function AttendancePage() {
       .catch(() => {})
       .finally(() => setLoadingBatches(false));
   }, []);
+
+  // When class filter changes, reset batch selection
+  useEffect(() => {
+    setBatchFilter('');
+    setEnrollments([]);
+    setSubjectFilter('');
+    setRecords({});
+    setExtraStudents([]);
+    setAbsentees([]);
+  }, [classFilter]);
 
   // Load enrollments when batch changes
   useEffect(() => {
@@ -186,7 +197,15 @@ export default function AttendancePage() {
 
         {/* Controls */}
         <Card>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div>
+              <label>Class</label>
+              <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
+                <option value="">All Classes</option>
+                <option value="11">Class 11</option>
+                <option value="12">Class 12</option>
+              </select>
+            </div>
             <div>
               <label>Date</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -195,7 +214,9 @@ export default function AttendancePage() {
               <label>Batch</label>
               <select value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
                 <option value="">Select batch</option>
-                {batches.map((b) => (
+                {batches
+                  .filter((b) => !classFilter || b.class === classFilter)
+                  .map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
                   </option>

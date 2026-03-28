@@ -14,6 +14,7 @@ export default function BatchesPage() {
   const router = useRouter();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [classFilter, setClassFilter] = useState('all');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,7 +80,16 @@ export default function BatchesPage() {
     <div>
       <Header title="Batches" subtitle="Manage teaching batches" />
       <div className="p-6 space-y-4">
-        <div className="flex justify-end">
+        <div className="flex items-center gap-3 justify-between">
+          <select
+            value={classFilter}
+            onChange={e => setClassFilter(e.target.value)}
+            className="h-10 bg-[#0a0c14] border border-[#1e2130] rounded-xl px-4 text-white text-sm"
+          >
+            <option value="all">All Classes</option>
+            <option value="11">Class 11</option>
+            <option value="12">Class 12</option>
+          </select>
           <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Create Batch</Button>
         </div>
 
@@ -89,7 +99,9 @@ export default function BatchesPage() {
           <>
             {/* Batch Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {batches.map(b => (
+              {batches
+                .filter(b => classFilter === 'all' || b.class === classFilter)
+                .map(b => (
                 <Card 
                   key={b.id} 
                   className="hover:border-violet-500/40 transition-all relative group cursor-pointer hover:scale-[1.02]"

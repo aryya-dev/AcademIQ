@@ -7,7 +7,11 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { Printer, Search, Download, Trash2 } from 'lucide-react';
 import { getEnrollments } from '@/lib/queries/enrollments';
-import { updateStudent, deleteStudent } from '@/lib/queries/students';
+import { updateStudent, deleteStudent, createStudent, getStudents as getRawStudents } from '@/lib/queries/students';
+import { getBatches } from '@/lib/queries/batches';
+import { getSubjects } from '@/lib/queries/subjects';
+import { createEnrollment } from '@/lib/queries/enrollments';
+import * as XLSX from 'xlsx';
 
 // Custom batch order as requested
 const BATCH_ORDER = [
@@ -27,7 +31,9 @@ const STATUS_OPTIONS = [
 export default function StudentDatabaseTracker() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [classFilter, setClassFilter] = useState('all');
 
   async function load() {
     setLoading(true);
@@ -108,11 +114,13 @@ export default function StudentDatabaseTracker() {
     }
   }
 
-  const filteredData = data.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.school_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.batches.some((b: string) => b.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredData = data.filter(s => {
+    const matchesClass = classFilter === 'all' || s.class === classFilter;
+    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.school_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.batches.some((b: string) => b.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesClass && matchesSearch;
+  });
 
   const columns = [
     { key: 'sl', header: 'SL#', render: (_: any, i: number) => <span>{i + 1}</span> },
@@ -157,6 +165,97 @@ export default function StudentDatabaseTracker() {
       </Button>
     )},
   ];
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const rawData = XLSX.utils.sheet_to_json(ws) as any[];
+
+        if (rawData.length === 0) {
+          alert('Excel file is empty');
+          setImporting(false);
+          return;
+        }
+
+        // Fetch lookup data
+        const [allBatches, allSubjects, allStudents] = await Promise.all([
+          getBatches(),
+          getSubjects(),
+          getRawStudents()
+        ]);
+
+        const batchMap = new Map(allBatches.map(b => [b.name.toLowerCase(), b.id]));
+        const subjectMap = new Map(allSubjects.map(s => [s.name.toLowerCase(), s.id]));
+        
+        let count = 0;
+        for (const row of rawData) {
+          const name = row['Name'] || row['name'];
+          if (!name) continue;
+
+          const studentData = {
+            name,
+            school_name: row['School Name'] || row['school_name'] || '',
+            class: String(row['Class'] || row['class'] || '12'),
+            parent_phone: row['Phone'] || row['phone'] || row['parent_phone'] || '',
+            status: (row['Status'] || row['status'] || 'Active').toLowerCase(),
+            remarks: row['Remarks'] || row['remarks'] || ''
+          };
+
+          // Find or create student
+          let student = allStudents.find(s => s.name.toLowerCase() === name.toLowerCase() && s.class === studentData.class);
+          
+          if (!student) {
+            student = await createStudent(studentData);
+          } else {
+            student = await updateStudent(student.id, studentData);
+          }
+
+          // Handle enrollment if batch/subject provided
+          const batchName = row['Batch'] || row['batch'];
+          const subjectName = row['Subject'] || row['subject'];
+
+          if (batchName && subjectName) {
+            const batchId = batchMap.get(batchName.toLowerCase());
+            const subjectId = subjectMap.get(subjectName.toLowerCase());
+
+            if (batchId && subjectId) {
+              // Check existing enrollment
+              const existingEnrollment = (student as any).enrollments?.find((en: any) => en.batch_id === batchId && en.subject_id === subjectId);
+              if (!existingEnrollment) {
+                await createEnrollment({
+                  student_id: student.id,
+                  batch_id: batchId,
+                  subject_id: subjectId,
+                  role: 'primary'
+                });
+              }
+            }
+          }
+          count++;
+        }
+
+        alert(`Successfully imported ${count} students`);
+        load();
+      };
+      reader.readAsBinaryString(file);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to import Excel file. Check column headings.');
+    } finally {
+      setImporting(false);
+      // Reset input
+      e.target.value = '';
+    }
+  }
 
   function handlePrint() {
     window.print();
@@ -222,16 +321,43 @@ export default function StudentDatabaseTracker() {
         </div>
 
         <div className="flex flex-col sm:flex-row justify-between gap-4 print:hidden">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4b5563]" />
-            <input 
-              placeholder="Search by name, batch, school..." 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)}
-              className="pl-10 h-10"
-            />
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <select
+              value={classFilter}
+              onChange={e => setClassFilter(e.target.value)}
+              className="h-10 bg-[#141722] border border-[#1e2130] rounded-xl px-4 text-sm text-white outline-none focus:ring-1 focus:ring-violet-500"
+            >
+              <option value="all">All Classes</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4b5563]" />
+              <input 
+                placeholder="Search by name, batch, school..." 
+                value={searchTerm} 
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10 h-10"
+              />
+            </div>
           </div>
           <div className="flex gap-2">
+            <input 
+              type="file" 
+              id="excel-import" 
+              className="hidden" 
+              accept=".xlsx,.xls,.csv" 
+              onChange={handleImport}
+              disabled={importing}
+            />
+            <Button 
+              variant="secondary" 
+              icon={<Download className="w-4 h-4 rotate-180" />} 
+              onClick={() => document.getElementById('excel-import')?.click()}
+              disabled={importing}
+            >
+              {importing ? 'Importing...' : 'Import Excel'}
+            </Button>
             <Button variant="secondary" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>Print Report</Button>
             <Button variant="secondary" icon={<Download className="w-4 h-4" />} onClick={handleExport}>Export Excel</Button>
           </div>

@@ -15,6 +15,7 @@ export default function MarksReportTracker() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [classFilter, setClassFilter] = useState('');
 
   async function load() {
     setLoading(true);
@@ -111,10 +112,12 @@ export default function MarksReportTracker() {
 
   useEffect(() => { load(); }, []);
 
-  const filteredData = data.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.batch.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredData = data.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.batch.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesClass = classFilter === '' || s.batch.startsWith(classFilter);
+    return matchesSearch && matchesClass;
+  });
 
   const getTrendIcon = (trend: string) => {
     if (trend === 'up') return <TrendingUp className="w-3 h-3 text-emerald-400" />;
@@ -168,14 +171,25 @@ export default function MarksReportTracker() {
       
       <div className="p-6 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between gap-4 print:hidden">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4b5563]" />
-            <input 
-              placeholder="Search by student or batch..." 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)}
-              className="pl-10 h-10"
-            />
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <select
+              value={classFilter}
+              onChange={e => setClassFilter(e.target.value)}
+              className="h-10 bg-[#141722] border border-[#1e2130] rounded-xl px-4 text-sm text-white outline-none focus:ring-1 focus:ring-violet-500"
+            >
+              <option value="">All Classes</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4b5563]" />
+              <input 
+                placeholder="Search by student or batch..." 
+                value={searchTerm} 
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10 h-10"
+              />
+            </div>
           </div>
           <Button variant="secondary" icon={<Printer className="w-4 h-4" />} onClick={() => window.print()}>
             Print Report

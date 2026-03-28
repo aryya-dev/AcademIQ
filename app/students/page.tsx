@@ -29,6 +29,7 @@ export default function StudentsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [filtered, setFiltered] = useState<Student[]>([]);
   const [search, setSearch] = useState('');
+  const [classFilter, setClassFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [batchFilter, setBatchFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -52,6 +53,7 @@ export default function StudentsPage() {
 
   useEffect(() => {
     let data = students;
+    if (classFilter !== 'all') data = data.filter(s => s.class === classFilter);
     if (statusFilter !== 'all') data = data.filter(s => s.status === statusFilter);
     if (batchFilter !== 'all') {
       data = data.filter(s =>
@@ -63,7 +65,7 @@ export default function StudentsPage() {
       s.school_name?.toLowerCase().includes(search.toLowerCase())
     );
     setFiltered(data);
-  }, [students, search, statusFilter, batchFilter]);
+  }, [students, search, classFilter, statusFilter, batchFilter]);
 
   // Helper: get unique batches for a student
   function getStudentBatches(s: Student) {
@@ -230,6 +232,15 @@ export default function StudentsPage() {
                 className="pl-9"
               />
             </div>
+            <select
+              value={classFilter}
+              onChange={e => setClassFilter(e.target.value)}
+              className="h-10 bg-[#0a0c14] border-[#1e2130] rounded-xl px-4 text-white text-sm"
+            >
+              <option value="all">All Classes</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
             <select 
               value={statusFilter} 
               onChange={e => setStatusFilter(e.target.value)}
@@ -247,9 +258,11 @@ export default function StudentsPage() {
             </select>
             <select value={batchFilter} onChange={e => setBatchFilter(e.target.value)} style={{ width: 'auto' }}>
               <option value="all">All Batches</option>
-              {batches.map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
+              {batches
+                .filter(b => classFilter === 'all' || b.class === classFilter)
+                .map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
             </select>
           </div>
           <Link href="/students/new">

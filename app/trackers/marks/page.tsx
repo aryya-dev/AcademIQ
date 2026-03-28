@@ -57,6 +57,7 @@ export default function MarksTrackerPage() {
   const [allMarks, setAllMarks] = useState<SchoolExamMarks[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedClass, setSelectedClass] = useState('');
   const [selectedBatch, setSelectedBatch] = useState('');
 
   async function loadData() {
@@ -141,8 +142,9 @@ export default function MarksTrackerPage() {
       
     const studentBatches = Array.from(new Set(s.enrollments?.map((e: any) => e.batches?.name))).filter(Boolean);
     const matchesBatch = selectedBatch === '' || studentBatches.includes(selectedBatch);
+    const matchesClass = selectedClass === '' || s.class === selectedClass;
     
-    return matchesSearch && matchesBatch;
+    return matchesSearch && matchesBatch && matchesClass;
   });
 
   const columns = [
@@ -268,12 +270,23 @@ export default function MarksTrackerPage() {
               />
             </div>
             <select
+              value={selectedClass}
+              onChange={e => { setSelectedClass(e.target.value); setSelectedBatch(''); }}
+              className="h-10 bg-[#141722] border border-[#1e2130] rounded-lg px-3 text-sm text-[#d1d5db] focus:ring-1 focus:ring-violet-500 w-full sm:w-36 outline-none"
+            >
+              <option value="">All Classes</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
+            <select
               value={selectedBatch}
               onChange={e => setSelectedBatch(e.target.value)}
               className="h-10 bg-[#141722] border border-[#1e2130] rounded-lg px-3 text-sm text-[#d1d5db] focus:ring-1 focus:ring-violet-500 w-full sm:w-48 outline-none"
             >
               <option value="">All Batches</option>
-              {BATCH_ORDER.map(b => (
+              {BATCH_ORDER
+                .filter(b => selectedClass === '' || b.startsWith(selectedClass))
+                .map(b => (
                 <option key={b} value={b}>{b}</option>
               ))}
             </select>

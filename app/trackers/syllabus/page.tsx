@@ -16,6 +16,7 @@ const TERMS = ['UT-1', 'Half Yearly', 'UT-2', 'Annual Term'];
 export default function SyllabusTrackerPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [classFilter, setClassFilter] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedBatch, setSelectedBatch] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -193,7 +194,15 @@ export default function SyllabusTrackerPage() {
             
             <div className="space-y-1">
               <p className="text-[10px] uppercase text-[#4b5563] font-bold ml-1">Class</p>
-              <Badge variant="violet" className="h-9 px-4 text-sm">{selectedBatchObj?.class || '—'}</Badge>
+              <select
+                value={classFilter}
+                onChange={e => { setClassFilter(e.target.value); setSelectedBatch(''); }}
+                className="bg-[#0f1117] border-[#1e2130] rounded-lg h-9 px-3 text-xs text-white focus:border-violet-500 outline-none min-w-[100px]"
+              >
+                <option value="">All</option>
+                <option value="11">Class 11</option>
+                <option value="12">Class 12</option>
+              </select>
             </div>
 
             <div className="space-y-1">
@@ -203,7 +212,10 @@ export default function SyllabusTrackerPage() {
                 onChange={e => setSelectedBatch(e.target.value)}
                 className="bg-[#0f1117] border-[#1e2130] rounded-lg h-9 px-3 text-xs text-white focus:border-violet-500 outline-none min-w-[140px]"
               >
-                {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                <option value="">Select batch</option>
+                {batches
+                  .filter(b => classFilter === '' || b.class === classFilter)
+                  .map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
 

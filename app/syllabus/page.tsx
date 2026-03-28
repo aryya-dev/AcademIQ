@@ -22,6 +22,7 @@ export default function SyllabusPage() {
   const [saving, setSaving] = useState(false);
   const [filterSubject, setFilterSubject] = useState('all');
   const [filterBatch, setFilterBatch] = useState('all');
+  const [filterClass, setFilterClass] = useState('all');
   const [form, setForm] = useState({ subject_id: '', batch_id: '', chapter: '', status: 'pending' as const });
 
   async function load() {
@@ -53,6 +54,7 @@ export default function SyllabusPage() {
   }
 
   const filtered = syllabus.filter(s => {
+    if (filterClass !== 'all' && (s as any).batches?.class !== filterClass) return false;
     if (filterSubject !== 'all' && (s as any).subject_id !== filterSubject) return false;
     if (filterBatch !== 'all' && (s as any).batch_id !== filterBatch) return false;
     return true;
@@ -90,13 +92,20 @@ export default function SyllabusPage() {
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           <div className="flex gap-3">
+            <select value={filterClass} onChange={e => setFilterClass(e.target.value)} style={{ width: 'auto' }}>
+              <option value="all">All Classes</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
             <select value={filterSubject} onChange={e => setFilterSubject(e.target.value)} style={{ width: 'auto' }}>
               <option value="all">All Subjects</option>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <select value={filterBatch} onChange={e => setFilterBatch(e.target.value)} style={{ width: 'auto' }}>
               <option value="all">All Batches</option>
-              {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              {batches
+                .filter(b => filterClass === 'all' || b.class === filterClass)
+                .map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </div>
           <Button icon={<Plus className="w-4 h-4" />} onClick={() => setOpen(true)}>Add Chapter</Button>

@@ -23,6 +23,7 @@ export default function InformationTrackerPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [classFilter, setClassFilter] = useState('all');
 
   async function load() {
     setLoading(true);
@@ -64,10 +65,11 @@ export default function InformationTrackerPage() {
   useEffect(() => { load(); }, []);
 
   const filteredData = data.filter(s => {
+    const matchesClass = classFilter === 'all' || s.class === classFilter;
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (s.batchName || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesClass && matchesSearch && matchesStatus;
   });
 
   const columns = [
@@ -200,6 +202,15 @@ export default function InformationTrackerPage() {
             />
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto">
+            <select
+              value={classFilter}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setClassFilter(e.target.value)}
+              className="bg-[#0f1117] border-[#1e2130] text-xs h-10 w-full sm:w-32"
+            >
+              <option value="all">All Classes</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
             <span className="text-xs text-[#6b7280] hidden sm:inline">Filter Status:</span>
             <select 
               value={statusFilter} 
