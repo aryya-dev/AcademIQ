@@ -10,6 +10,7 @@ import { useRole } from '@/hooks/useRole';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/students', label: 'Students', icon: Users },
+  { href: '/teachers', label: 'Teachers', icon: BookOpen },
   { href: '/batches', label: 'Batches', icon: Layers },
   { href: '/enrollments', label: 'Enrollments', icon: GitMerge },
   { href: '/attendance', label: 'Attendance', icon: CalendarCheck },

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Bell, Search, LogOut, User, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { Bell, Search, LogOut, User, AlertCircle, Info, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -11,9 +11,10 @@ interface HeaderProps {
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
+  backButton?: boolean;
 }
 
-export default function Header({ title, subtitle, action }: HeaderProps) {
+export default function Header({ title, subtitle, action, backButton }: HeaderProps) {
   const [user, setUser] = useState<any>(null);
   const supabase = createClient();
   const router = useRouter();
@@ -40,9 +41,19 @@ export default function Header({ title, subtitle, action }: HeaderProps) {
 
   return (
     <header className="h-16 bg-[#0f1117]/80 backdrop-blur border-b border-[#1e2130] px-6 flex items-center justify-between sticky top-0 z-30">
-      <div>
-        <h1 className="text-white font-semibold text-lg leading-none">{title}</h1>
-        {subtitle && <p className="text-[#6b7280] text-xs mt-0.5">{subtitle}</p>}
+      <div className="flex items-center gap-4">
+        {backButton && (
+          <button 
+            onClick={() => router.back()}
+            className="w-8 h-8 rounded-lg bg-[#1e2130] border border-[#2a2f45] flex items-center justify-center text-[#9ca3af] hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        )}
+        <div>
+          <h1 className="text-white font-semibold text-lg leading-none">{title}</h1>
+          {subtitle && <p className="text-[#6b7280] text-xs mt-0.5">{subtitle}</p>}
+        </div>
       </div>
       <div className="flex items-center gap-3">
         {action && <div className="mr-2">{action}</div>}

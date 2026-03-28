@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import Header from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import Table from '@/components/ui/Table';
@@ -9,6 +9,41 @@ import { Printer, Search, Download, TrendingUp, TrendingDown, Minus } from 'luci
 import { getStudents } from '@/lib/queries/students';
 import { getAllSchoolMarks, upsertSchoolMarks } from '@/lib/queries/school_marks';
 import type { Student, SchoolExamMarks } from '@/types';
+
+// Debounced input component to prevent slow re-renders on every keystroke
+function MarkInput({ value, onChange, placeholder = "—" }: { value: string | number, onChange: (val: string) => void, placeholder?: string }) {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    if (localValue !== value) {
+      onChange(String(localValue));
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <input 
+      type="text"
+      pattern="[0-9]*"
+      inputMode="decimal"
+      value={localValue}
+      placeholder={placeholder}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+    />
+  );
+}
 
 const BATCH_ORDER = [
   '12 JEE A', '12 JEE B', '12 NEET', '12 Boards',
@@ -22,6 +57,7 @@ export default function MarksTrackerPage() {
   const [allMarks, setAllMarks] = useState<SchoolExamMarks[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBatch, setSelectedBatch] = useState('');
 
   async function loadData() {
     setLoading(true);
@@ -99,10 +135,15 @@ export default function MarksTrackerPage() {
     return vals.reduce((a, b) => a + (b || 0), 0) / vals.length;
   };
 
-  const filteredStudents = students.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.enrollments?.[0]?.batches?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredStudents = students.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.enrollments?.[0]?.batches?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+    const studentBatches = Array.from(new Set(s.enrollments?.map((e: any) => e.batches?.name))).filter(Boolean);
+    const matchesBatch = selectedBatch === '' || studentBatches.includes(selectedBatch);
+    
+    return matchesSearch && matchesBatch;
+  });
 
   const columns = [
     { key: 'sl', header: 'SL#', render: (_: any, i: number) => <span>{i + 1}</span> },
@@ -110,8 +151,8 @@ export default function MarksTrackerPage() {
     { key: 'class', header: 'Class', render: (s: any) => <span>{s.class}</span> },
     { key: 'batch', header: 'Batch', render: (s: any) => (
       <div className="flex flex-wrap gap-1">
-        {s.enrollments?.map((e: any) => (
-          <Badge key={e.batches?.id} variant="violet">{e.batches?.name}</Badge>
+        {Array.from(new Set(s.enrollments?.map((e: any) => e.batches?.name))).filter(Boolean).map((batchName) => (
+          <Badge key={batchName as string} variant="violet">{batchName as string}</Badge>
         ))}
       </div>
     )},
@@ -122,60 +163,45 @@ export default function MarksTrackerPage() {
         { key: 'physics', header: 'P', render: (s: any) => {
           const m = getStudentMarks(s.id);
           return (
-            <input 
-              type="number"
+            <MarkInput 
               value={m?.physics ?? ''}
-              placeholder="—"
-              onChange={(e) => handleMarkChange(s.id, 'physics', e.target.value)}
-              className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+              onChange={(val) => handleMarkChange(s.id, 'physics', val)}
             />
           );
         }},
         { key: 'chemistry', header: 'C', render: (s: any) => {
           const m = getStudentMarks(s.id);
           return (
-            <input 
-              type="number"
+            <MarkInput 
               value={m?.chemistry ?? ''}
-              placeholder="—"
-              onChange={(e) => handleMarkChange(s.id, 'chemistry', e.target.value)}
-              className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+              onChange={(val) => handleMarkChange(s.id, 'chemistry', val)}
             />
           );
         }},
         { key: 'math', header: 'M', render: (s: any) => {
           const m = getStudentMarks(s.id);
           return (
-            <input 
-              type="number"
+            <MarkInput 
               value={m?.math ?? ''}
-              placeholder="—"
-              onChange={(e) => handleMarkChange(s.id, 'math', e.target.value)}
-              className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+              onChange={(val) => handleMarkChange(s.id, 'math', val)}
             />
           );
         }},
         { key: 'biology', header: 'B', render: (s: any) => {
           const m = getStudentMarks(s.id);
           return (
-            <input 
-              type="number"
+            <MarkInput 
               value={m?.biology ?? ''}
-              placeholder="—"
-              onChange={(e) => handleMarkChange(s.id, 'biology', e.target.value)}
-              className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+              onChange={(val) => handleMarkChange(s.id, 'biology', val)}
             />
           );
         }},
         { key: 'computer', header: 'Com', render: (s: any) => {
           const m = getStudentMarks(s.id);
           return (
-            <input 
-              type="number"
+            <MarkInput 
               value={m?.computer ?? ''}
-              placeholder="—"
-              onChange={(e) => handleMarkChange(s.id, 'computer', e.target.value)}
-              className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+              onChange={(val) => handleMarkChange(s.id, 'computer', val)}
             />
           );
         }},
@@ -202,13 +228,13 @@ export default function MarksTrackerPage() {
         i + 1,
         s.name,
         s.class,
-        s.enrollments?.map((e: any) => e.batches?.name).join(', '),
-        m?.physics ?? '-',
-        m?.chemistry ?? '-',
-        m?.math ?? '-',
-        m?.biology ?? '-',
-        m?.computer ?? '-',
-        total || '-'
+        Array.from(new Set(s.enrollments?.map((e: any) => e.batches?.name))).filter(Boolean).join(', '),
+        m?.physics ?? '',
+        m?.chemistry ?? '',
+        m?.math ?? '',
+        m?.biology ?? '',
+        m?.computer ?? '',
+        total || ''
       ];
     });
 
@@ -231,17 +257,29 @@ export default function MarksTrackerPage() {
       
       <div className="p-6 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between gap-4 print:hidden">
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4b5563]" />
-            <input 
-              placeholder="Search students..." 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)}
-              className="pl-10 h-10 w-full"
-            />
+          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4b5563]" />
+              <input 
+                placeholder="Search students..." 
+                value={searchTerm} 
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10 h-10 w-full"
+              />
+            </div>
+            <select
+              value={selectedBatch}
+              onChange={e => setSelectedBatch(e.target.value)}
+              className="h-10 bg-[#141722] border border-[#1e2130] rounded-lg px-3 text-sm text-[#d1d5db] focus:ring-1 focus:ring-violet-500 w-full sm:w-48 outline-none"
+            >
+              <option value="">All Batches</option>
+              {BATCH_ORDER.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto justify-end">
             <Button variant="secondary" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>Print</Button>
             <Button variant="secondary" icon={<Download className="w-4 h-4" />} onClick={handleExport}>Export</Button>
           </div>
@@ -296,48 +334,33 @@ export default function MarksTrackerPage() {
                           </div>
                         </td>
                         <td className="px-2 py-3 text-center">
-                          <input 
-                            type="number"
+                          <MarkInput 
                             value={m?.physics ?? ''}
-                            placeholder="—"
-                            onChange={(e) => handleMarkChange(s.id, 'physics', e.target.value)}
-                            className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+                            onChange={(val) => handleMarkChange(s.id, 'physics', val)}
                           />
                         </td>
                         <td className="px-2 py-3 text-center">
-                          <input 
-                            type="number"
+                          <MarkInput 
                             value={m?.chemistry ?? ''}
-                            placeholder="—"
-                            onChange={(e) => handleMarkChange(s.id, 'chemistry', e.target.value)}
-                            className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+                            onChange={(val) => handleMarkChange(s.id, 'chemistry', val)}
                           />
                         </td>
                         <td className="px-2 py-3 text-center">
-                          <input 
-                            type="number"
+                          <MarkInput 
                             value={m?.math ?? ''}
-                            placeholder="—"
-                            onChange={(e) => handleMarkChange(s.id, 'math', e.target.value)}
-                            className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+                            onChange={(val) => handleMarkChange(s.id, 'math', val)}
                           />
                         </td>
                         <td className="px-2 py-3 text-center">
-                          <input 
-                            type="number"
+                          <MarkInput 
                             value={m?.biology ?? ''}
-                            placeholder="—"
-                            onChange={(e) => handleMarkChange(s.id, 'biology', e.target.value)}
-                            className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+                            onChange={(val) => handleMarkChange(s.id, 'biology', val)}
                           />
                         </td>
                         <td className="px-2 py-3 text-center">
-                          <input 
-                            type="number"
+                          <MarkInput 
                             value={m?.computer ?? ''}
-                            placeholder="—"
-                            onChange={(e) => handleMarkChange(s.id, 'computer', e.target.value)}
-                            className="w-12 bg-[#1e2130] border-none text-center text-xs p-1 focus:ring-1 focus:ring-violet-500 rounded"
+                            onChange={(val) => handleMarkChange(s.id, 'computer', val)}
                           />
                         </td>
                         <td className="px-4 py-3 text-center">

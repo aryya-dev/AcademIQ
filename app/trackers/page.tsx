@@ -39,6 +39,14 @@ export default function TrackersPage() {
       icon: <Users className="w-6 h-6 text-blue-400" />,
       href: '/trackers/information',
       color: 'blue'
+    },
+    {
+      id: 'feedback',
+      title: 'Feedback Tracker',
+      description: 'Collect and manage student feedback and remarks for teachers.',
+      icon: <FileText className="w-6 h-6 text-pink-400" />,
+      href: '/trackers/feedback',
+      color: 'pink'
     }
   ];
 

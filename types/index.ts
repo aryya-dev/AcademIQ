@@ -43,6 +43,9 @@ export interface Teacher {
   name: string;
   email?: string;
   created_at?: string;
+  // Join fields
+  teacher_batches?: { batch_id: string; batches?: Batch }[];
+  teacher_subjects?: { subject_id: string; subjects?: Subject }[];
 }
 
 export interface Mentor {
