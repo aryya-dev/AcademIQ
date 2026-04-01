@@ -16,8 +16,8 @@ export function useRole() {
           const p = await getProfile(user.id);
           setProfile(p);
         }
-      } catch (err) {
-        console.error('Failed to load role:', err);
+      } catch (err: any) {
+        console.error('Failed to load role:', err?.message || err);
       } finally {
         setLoading(false);
       }
@@ -27,8 +27,11 @@ export function useRole() {
 
   return {
     profile,
-    role: profile?.role || null, // 'king' | 'knight' | 'mentor' | null
+    role: profile?.role || null,
+    subRole: profile?.sub_role || null,
     loading,
-    isKingOrKnight: profile?.role === 'king' || profile?.role === 'knight',
+    isAdmin: profile?.role === 'admin',
+    isTeacher: profile?.role === 'teacher',
+    isKingOrKnight: profile?.role === 'admin' && (profile?.sub_role === 'king' || profile?.sub_role === 'knight'),
   };
 }

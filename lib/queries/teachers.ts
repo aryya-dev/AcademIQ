@@ -99,3 +99,26 @@ export async function removeBatchFromTeacher(teacherId: string, batchId: string)
     .eq('batch_id', batchId);
   if (error) throw error;
 }
+export async function getUnlinkedTeachers() {
+  const { data, error } = await supabase
+    .from('teachers')
+    .select('*')
+    .not('id', 'in', 
+      supabase.from('profiles').select('teacher_id').filter('teacher_id', 'not.is', null)
+    )
+    .order('name');
+  
+  // Alternative simpler approach if the above nested filter is tricky with current supabase-js:
+  // Just fetch all teachers and all profiles and filter in JS if needed, but let's try a better SQL way.
+  
+  const { data: linkedIds } = await supabase.from('profiles').select('teacher_id').not('teacher_id', 'is', null);
+  const ids = (linkedIds || []).map((l: { teacher_id: string | null }) => l.teacher_id);
+  
+  const { data: unlinked } = await supabase
+    .from('teachers')
+    .select('*')
+    .not('id', 'in', `(${ids.join(',') || '00000000-0000-0000-0000-000000000000'})`)
+    .order('name');
+
+  return unlinked as Teacher[];
+}

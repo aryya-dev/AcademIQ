@@ -14,6 +14,18 @@ create table if not exists mentors (
   created_at timestamptz default now()
 );
 
+-- Profiles for RBAC (links auth.users to system roles)
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  role text not null check (role in ('admin', 'teacher')),
+  sub_role text check (sub_role in ('king', 'queen', 'knight', 'mentor')),
+  assigned_class text,
+  teacher_id uuid references teachers(id) on delete set null,
+  mentor_id uuid references mentors(id) on delete set null,
+  created_at timestamptz default now()
+);
+
 create table if not exists teachers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -189,6 +201,20 @@ create table if not exists merit_demerit_logs (
   actor_type text not null,
   reason text not null,
   points integer not null,
+  created_at timestamptz default now()
+);
+
+-- ----------------------------------------------------------------
+-- TEACHER ANNOUNCEMENTS (CW, HW, Exams)
+-- ----------------------------------------------------------------
+
+create table if not exists teacher_announcements (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid not null references teachers(id) on delete cascade,
+  batch_id uuid references batches(id) on delete cascade,
+  subject_id uuid references subjects(id) on delete cascade,
+  type text not null check (type in ('cw', 'hw', 'exam', 'announcement')),
+  content text not null,
   created_at timestamptz default now()
 );
 

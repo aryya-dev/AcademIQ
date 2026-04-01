@@ -3,8 +3,11 @@ import { supabase } from '@/lib/supabase';
 export interface Profile extends Record<string, unknown> {
   id: string;
   full_name: string | null;
-  role: 'king' | 'knight' | 'mentor' | null;
+  role: 'admin' | 'teacher';
+  sub_role: 'king' | 'queen' | 'knight' | 'mentor' | null;
   assigned_class: string | null;
+  teacher_id: string | null;
+  mentor_id: string | null;
   created_at?: string;
 }
 

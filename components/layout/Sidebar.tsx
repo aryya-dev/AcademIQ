@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useRole } from '@/hooks/useRole';
 
-const navItems = [
+const adminNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/students', label: 'Students', icon: Users },
   { href: '/teachers', label: 'Teachers', icon: BookOpen },
@@ -21,9 +21,16 @@ const navItems = [
   { href: '/trackers', label: 'Trackers', icon: ClipboardList },
 ];
 
+const teacherNavItems = [
+  { href: '/teacher', label: 'My Dashboard', icon: LayoutDashboard },
+  { href: '/teacher/attendance', label: 'Attendance', icon: CalendarCheck },
+  { href: '/teacher/announcements', label: 'Announcements', icon: MessageCircle },
+];
+
 export default function Sidebar() {
   const pathname = usePathname();
-  const { isKingOrKnight, role, loading } = useRole();
+  const { isKingOrKnight, isAdmin, isTeacher, role, subRole, loading } = useRole();
+  const navItems = isTeacher ? teacherNavItems : adminNavItems;
   return (
     <aside className="w-64 min-h-screen bg-[#0f1117] border-r border-[#1e2130] flex flex-col">
       {/* Logo */}
@@ -59,7 +66,7 @@ export default function Sidebar() {
           );
         })}
         
-        {!loading && role === 'king' && (
+        {!loading && isAdmin && (subRole === 'king' || subRole === 'knight' || subRole === 'mentor') && (
           <div className="pt-4 mt-4 border-t border-[#1e2130]">
             <p className="px-3 text-xs font-semibold text-[#4b5563] uppercase tracking-wider mb-2">
               Management
